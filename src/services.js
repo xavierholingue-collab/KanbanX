@@ -2,7 +2,7 @@
 // transaction « comme » l'utilisateur : le code vérifie les droits ET la base les applique (RLS).
 import { transaction } from './db.js';
 import { introuvable, interdit, invalide } from './erreurs.js';
-import { publier } from './evenements.js';
+import { publier, expulser } from './evenements.js';
 import { rendreMarkdown, prenom } from './markdown.js';
 
 const PAS = 1024;
@@ -148,7 +148,7 @@ export async function changerRole(ctx, id, userId, { role }) {
 }
 
 export async function retirerMembre(ctx, id, userId) {
-  return agir(ctx, async (c, emit) => {
+  const r = await agir(ctx, async (c, emit) => {
     const role = await roleSur(c, id);
     if (userId !== ctx.user.id) exigerProprietaire(role);
     await verifierDernierProprietaire(c, id, userId);
@@ -159,6 +159,8 @@ export async function retirerMembre(ctx, id, userId) {
     emit(id, { kind: 'members', id, retire: userId });
     return { ok: true };
   });
+  expulser(id, userId); // son flux en direct est coupé
+  return r;
 }
 
 // ---------- Colonnes ----------

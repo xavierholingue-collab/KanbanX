@@ -6,6 +6,7 @@ import { toast, erreur } from './toasts.js';
 import { activerGlisser, glisserAuClavier } from './dnd.js';
 import { ouvrirCarte, fermerCarte, carteOuverte, rafraichirCarte } from './carte.js';
 import { ouvrirMembres } from './membres.js';
+import { ouvrirActivite } from './activite.js';
 import { naviguer } from './app.js';
 
 export const T = {
@@ -172,6 +173,7 @@ function rendreBarre() {
     t.role === 'reader' ? h('span.badge', ROLES.reader) : '',
     h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'membres', onclick: () => ouvrirMembres(T) },
       h('span.avatars', t.members.slice(0, 4).map(avatar)), h('span', 'Membres'), h('span.visuellement-cache', ` du tableau (${t.members.length})`)),
+    h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'activite', onclick: () => ouvrirActivite(T) }, icone('activite'), 'Activité'),
     h('div.filtres', { role: 'search', 'aria-label': 'Filtrer les cartes' },
       h('div.recherche', icone('recherche'), recherche),
       h('select.champ', { 'aria-label': 'Filtrer par membre', 'data-cle': 'f-membre', onchange: (e) => { f.membre = e.target.value; appliquerFiltres(); rendreBarre(); } },

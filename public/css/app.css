@@ -293,3 +293,28 @@ kbd { font-family: var(--police-mono); font-size: var(--t-s); padding: 0.1em 0.4
 .titre-h { flex: 1; margin: 0; font-size: inherit; display: flex; }
 .titre-h .titre-editable { width: 100%; }
 .propriete input[type="date"] { width: auto; }
+
+/* ---------- Discussion et activité ---------- */
+.entete-section { margin-bottom: var(--e-2); }
+.entete-section h3 { margin: 0; }
+.espace { flex: 1; }
+.fil, .liste-activite { list-style: none; margin: var(--e-3) 0 0; padding: 0; display: grid; gap: var(--e-3); }
+.commentaire, .activite { display: flex; gap: var(--e-2); align-items: flex-start; }
+.commentaire > .avatar, .activite > .avatar, .composeur-commentaire > .avatar { margin-top: 0.15rem; }
+.bulle-conteneur, .bulle-edition, .zone-comm { flex: 1; min-width: 0; }
+.auteur { margin: 0 0 var(--e-1); font-size: var(--t-s); }
+.auteur time, .activite time { color: var(--c-texte-doux); font-size: var(--t-xs); }
+.bulle { padding: var(--e-2) var(--e-3); border-radius: var(--rayon-m); background: var(--c-surface); border: 1px solid var(--c-bordure); }
+.en-attente .bulle { opacity: 0.7; border-style: dashed; }
+.badge-agent { margin-left: var(--e-1); padding: 0 var(--e-1); border-radius: var(--rayon-s); font-size: var(--t-xs); font-weight: 700; background: var(--c-accent-pale); color: var(--c-sur-accent-pale); }
+.actions-comm .btn { min-height: 1.75rem; padding: 0 var(--e-1); font-size: var(--t-xs); text-decoration: underline; }
+@media (pointer: coarse), (max-width: 40rem) { .actions-comm .btn { min-height: var(--cible); } }
+.activite p { margin: 0; font-size: var(--t-s); padding-top: 0.2rem; }
+.composeur-commentaire { display: flex; gap: var(--e-2); align-items: flex-start; }
+.zone-comm { display: grid; gap: var(--e-1); justify-items: start; }
+.zone-comm .popover { width: 100%; }
+.suggestions { position: absolute; z-index: 30; left: 0; top: calc(100% + 2px); width: 16rem; list-style: none; margin: 0; padding: var(--e-1);
+  background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-m); box-shadow: var(--ombre-haute); }
+.suggestions .option[aria-selected="true"] { background: var(--c-primaire-pale); outline: 2px solid var(--c-primaire); }
+.dialog-lateral { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: min(26rem, 100vw); border-radius: 0; }
+.dialog-lateral h2 { display: flex; align-items: center; gap: var(--e-2); }
