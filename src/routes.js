@@ -6,7 +6,7 @@ import { config } from './config.js';
 import { ErreurHttp } from './erreurs.js';
 
 export const FLUX = Symbol('flux');
-const nom = (max = 100) => ({ type: 'string', min: 1, max, required: true });
+const nom = (max = 100, required = true) => ({ type: 'string', min: 1, max, required });
 const COULEURS = ['bleu', 'turquoise', 'vert', 'orange', 'rouge', 'violet', 'ardoise', 'brun'];
 const ROLES = ['owner', 'member', 'reader'];
 
@@ -51,7 +51,7 @@ r('DELETE', '/api/boards/:id/members/:userId', { tag: 'Membres', resume: 'Retire
 // --- Colonnes ---
 r('POST', '/api/boards/:id/columns', { tag: 'Colonnes', resume: 'Créer une colonne, à la fin.', corps: { name: nom() } }, ({ ctx, params, body }) => S.creerColonne(ctx, params.id, body));
 r('PATCH', '/api/columns/:id', { tag: 'Colonnes', resume: 'Renommer une colonne ou fixer sa limite d\'en-cours (WIP).',
-  corps: { name: nom(), wipLimit: { type: 'integer', min: 1, max: 999, nullable: true } } }, ({ ctx, params, body }) => S.modifierColonne(ctx, params.id, body));
+  corps: { name: nom(100, false), wipLimit: { type: 'integer', min: 1, max: 999, nullable: true } } }, ({ ctx, params, body }) => S.modifierColonne(ctx, params.id, body));
 r('POST', '/api/columns/:id/move', { tag: 'Colonnes', resume: 'Réordonner une colonne : nouvel index (0 = première).', corps: { index: { type: 'integer', min: 0, max: 10000, required: true } } },
 ({ ctx, params, body }) => S.deplacerColonne(ctx, params.id, body));
 r('POST', '/api/columns/:id/archive', { tag: 'Colonnes', resume: 'Archiver une colonne (annulable).' }, ({ ctx, params }) => S.archiverColonne(ctx, params.id, true));
@@ -61,7 +61,7 @@ r('POST', '/api/columns/:id/restore', { tag: 'Colonnes', resume: 'Restaurer une 
 r('POST', '/api/columns/:id/cards', { tag: 'Cartes', resume: 'Créer une carte à la fin de la colonne.', corps: { title: nom(300) } }, ({ ctx, params, body }) => S.creerCarte(ctx, params.id, body));
 r('GET', '/api/cards/:id', { tag: 'Cartes', resume: 'Lire une carte (description Markdown et rendue).' }, ({ ctx, params }) => S.obtenirCarte(ctx, params.id));
 r('PATCH', '/api/cards/:id', { tag: 'Cartes', resume: 'Modifier titre, description (Markdown), échéance, responsables, étiquettes.',
-  corps: { title: nom(300), description: { type: 'string', max: 20000, trim: false }, dueDate: { type: 'date', nullable: true },
+  corps: { title: nom(300, false), description: { type: 'string', max: 20000, trim: false }, dueDate: { type: 'date', nullable: true },
     assignees: { type: 'uuids', description: 'Identifiants des responsables (membres du tableau).' }, labels: { type: 'uuids' } } },
 ({ ctx, params, body }) => S.modifierCarte(ctx, params.id, body));
 r('POST', '/api/cards/:id/move', { tag: 'Cartes', resume: 'Déplacer une carte : colonne cible et index dans cette colonne.',

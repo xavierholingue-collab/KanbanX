@@ -36,9 +36,8 @@ export class Client {
   /** Connexion complète par lien magique, comme un humain. */
   async connecter(email) {
     reinitialiserLimites();
-    boiteDev.length = 0;
     await this.post('/api/auth/demander', { email });
-    const m = boiteDev.at(-1);
+    const m = boiteDev.findLast((x) => x.a === email.toLowerCase());
     const jeton = new URL(m.lien).searchParams.get('token');
     const r = await this.post('/api/auth/verifier', { token: jeton });
     this.csrf = r.data.csrf;

@@ -30,6 +30,8 @@ function envoyerJson(res, status, data, entetes = {}) {
 }
 
 async function lireCorps(req) {
+  const vide = !req.headers['transfer-encoding'] && !Number(req.headers['content-length'] ?? 0);
+  if (vide) return {};
   const type = req.headers['content-type'] ?? '';
   if (!/^application\/json(\s*;|$)/i.test(type)) throw new ErreurHttp(415, 'type_non_supporte', 'Content-Type: application/json requis.');
   const morceaux = [];
