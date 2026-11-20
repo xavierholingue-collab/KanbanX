@@ -65,6 +65,7 @@ async function main() {
   let code = 0;
   for (const [nom, fichiers] of lots) {
     if (!fichiers.length) continue;
+    if (process.env.SEULEMENT && process.env.SEULEMENT !== nom) continue;
     if (nom === 'e2e' && process.env.SANS_NAVIGATEUR) { console.log('\n(parcours navigateur ignorés : SANS_NAVIGATEUR)'); continue; }
     console.log(`\n=== ${nom} ===`);
     const status = await new Promise((res) => {
