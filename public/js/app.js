@@ -1,7 +1,7 @@
 // KanbanX — point d'entrée : routeur, en-tête, écrans de connexion et d'accueil.
 import { h, icone } from './dom.js';
 import { get, post, definirCsrf, ErreurApi } from './api.js';
-import { erreur } from './toasts.js';
+import { erreur, toast } from './toasts.js';
 import { ecranTableau, synchroniserCarte, quitterTableau } from './tableau.js';
 import { installerRaccourcis } from './raccourcis.js';
 
@@ -161,6 +161,22 @@ async function accueil() {
   };
   const boutonNouveau = h('button.tuile.tuile-nouveau', { type: 'button', onclick: ouvrirForm }, icone('plus'), ' Créer un tableau');
   tuileNouveau.append(boutonNouveau);
+  const fichier = h('input.visuellement-cache#fichier-trello', { type: 'file', accept: 'application/json,.json', onchange: async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (f.size > 10_000_000) return erreur('Fichier trop volumineux (10 Mo au plus).');
+    let data;
+    try { data = JSON.parse(await f.text()); } catch { return erreur('Ce fichier n\'est pas un export JSON de Trello valide.'); }
+    try {
+      const r = await post('/api/boards/import-trello', data);
+      const pl = (n, m) => `${n} ${m}${n > 1 ? 's' : ''}`;
+      toast(`Tableau « ${r.name} » importé : ${pl(r.colonnes, 'colonne')}, ${pl(r.cartes, 'carte')}, ${pl(r.commentaires, 'commentaire')}.`);
+      naviguer(`/b/${r.id}`);
+    } catch (err) { erreur(`Import impossible : ${err.message}`); }
+  } });
+  page.append(h('div.rangee.import', fichier,
+    h('label.btn.btn-secondaire', { for: 'fichier-trello' }, icone('archive'), 'Importer un tableau Trello (JSON)'),
+    h('span.aide', 'Listes, cartes, étiquettes, échéances et commentaires sont repris.')));
   liste.replaceChildren(
     ...tableaux.map((t) => h('li', h('a.tuile', { href: `/b/${t.id}` }, h('span', t.name, h('span.tuile-role', ROLES[t.role]))))),
     tuileNouveau,

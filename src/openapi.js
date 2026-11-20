@@ -7,6 +7,7 @@ export function genererOpenApi(routes) {
     const params = r.noms.map((n) => ({ name: n, in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }));
     const op = {
       tags: [r.tag ?? 'Divers'], summary: r.resume, parameters: [...params, ...(r.query ?? [])],
+      ...(r.corpsLibre ? { requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', description: 'Export JSON de Trello' } } } } } : {}),
       ...(r.corps ? { requestBody: { required: true, content: { 'application/json': { schema: versJsonSchema(r.corps) } } } } : {}),
       responses: { 200: { description: 'Succès' }, 400: { description: 'Requête invalide' }, 401: { description: 'Non authentifié' }, 403: { description: 'Droits insuffisants' }, 404: { description: 'Introuvable' }, 429: { description: 'Trop de requêtes' } },
       ...(r.auth === 'public' ? { security: [] } : {}),

@@ -11,6 +11,7 @@ export function phrase(a, { surCarte = false } = {}) {
   const carte = surCarte ? 'cette carte' : `la carte ${q(a.cardTitle ?? d.title ?? '?')}`;
   switch (a.action) {
     case 'tableau.cree': return `a créé le tableau ${q(d.name)}`;
+    case 'tableau.importe': return `a importé le tableau ${q(d.name)} depuis Trello (${d.cartes} cartes)`;
     case 'tableau.renomme': return `a renommé le tableau en ${q(d.name)}`;
     case 'colonne.creee': return `a ajouté la colonne ${q(d.name)}`;
     case 'colonne.renommee': return `a renommé la colonne ${q(d.from)} en ${q(d.to)}`;

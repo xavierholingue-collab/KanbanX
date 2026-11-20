@@ -323,3 +323,6 @@ kbd { font-family: var(--police-mono); font-size: var(--t-s); padding: 0.1em 0.4
 .doc-routes p { margin: 0; }
 .doc-routes pre { font-size: var(--t-xs); overflow-x: auto; background: var(--c-colonne); padding: var(--e-2); border-radius: var(--rayon-s); }
 .methode { font-weight: 700; color: var(--c-primaire); }
+.import { margin-top: var(--e-5); }
+.import .aide { margin: 0; }
+input[type="file"]:focus-visible + label { outline: 3px solid var(--c-focus); outline-offset: 2px; }

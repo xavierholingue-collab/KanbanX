@@ -29,7 +29,7 @@ function envoyerJson(res, status, data, entetes = {}) {
   res.end(corps);
 }
 
-async function lireCorps(req) {
+async function lireCorps(req, max = MAX_CORPS) {
   const vide = !req.headers['transfer-encoding'] && !Number(req.headers['content-length'] ?? 0);
   if (vide) return {};
   const type = req.headers['content-type'] ?? '';
@@ -38,7 +38,7 @@ async function lireCorps(req) {
   let n = 0;
   for await (const m of req) {
     n += m.length;
-    if (n > MAX_CORPS) throw new ErreurHttp(413, 'trop_gros', 'Corps de requête trop volumineux.');
+    if (n > max) throw new ErreurHttp(413, 'trop_gros', 'Corps de requête trop volumineux.');
     morceaux.push(m);
   }
   if (!n) return {};
@@ -96,7 +96,11 @@ async function api(req, res, url) {
     if (!memeOrigine(req)) throw new ErreurHttp(403, 'origine', 'Origine refusée.');
     if (ctx && !egalSur(req.headers['x-csrf-token'] ?? '', ctx.csrf)) throw new ErreurHttp(403, 'csrf', 'Jeton CSRF manquant ou invalide.');
   }
-  const body = ecriture ? valider(trouve.corps, await lireCorps(req)) : {};
+  let body = {};
+  if (ecriture) {
+    const brut = await lireCorps(req, trouve.maxCorps);
+    body = trouve.corpsLibre ? brut : valider(trouve.corps, brut);
+  }
   const entetes = {};
   const out = await trouve.handler({ ctx, params, body, query: url.searchParams, req, res, ip, entetes });
   if (out === FLUX) return;

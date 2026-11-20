@@ -285,12 +285,27 @@ function menuColonne(k, index) {
 }
 
 function definirWip(k) {
-  const brut = window.prompt(`Limite d'en-cours pour « ${k.name} » (laisser vide pour aucune limite) :`, k.wipLimit ?? '');
-  if (brut === null) return;
-  const v = brut.trim() === '' ? null : Number(brut);
-  if (v !== null && (!Number.isInteger(v) || v < 1 || v > 999)) return erreur('La limite doit être un nombre entier entre 1 et 999.');
-  optimiste((t) => { t.columns.find((c) => c.id === k.id).wipLimit = v; },
-    () => patch(`/api/columns/${k.id}`, { wipLimit: v }), 'Limite non enregistrée :');
+  const champ = h('input.champ#wip', { type: 'number', min: 1, max: 999, step: 1, inputmode: 'numeric', value: k.wipLimit ?? '', 'aria-describedby': 'aide-wip' });
+  const message = h('p.message.message-erreur', { role: 'alert', hidden: true });
+  const d = h('dialog.dialog-petit', { 'aria-labelledby': 'titre-wip' },
+    h('div.dialog-entete', h('h2#titre-wip', `Limite d'en-cours : ${k.name}`), h('button.btn.btn-icone.btn-discret', { type: 'button', 'aria-label': 'Fermer', onclick: () => d.close() }, icone('x'))),
+    h('form.dialog-corps.form-invitation', { onsubmit: (e) => {
+      e.preventDefault();
+      const brut = champ.value.trim();
+      const v = brut === '' ? null : Number(brut);
+      if (v !== null && (!Number.isInteger(v) || v < 1 || v > 999)) { message.textContent = 'Indiquez un nombre entier entre 1 et 999, ou laissez vide.'; message.hidden = false; champ.setAttribute('aria-invalid', 'true'); return champ.focus(); }
+      d.close();
+      optimiste((t) => { t.columns.find((c) => c.id === k.id).wipLimit = v; },
+        async () => { await patch(`/api/columns/${k.id}`, { wipLimit: v }); annoncer(v ? `Limite fixée à ${v} cartes.` : 'Limite retirée.'); }, 'Limite non enregistrée :');
+    } },
+    h('label.etiquette-champ', { for: 'wip' }, 'Nombre maximal de cartes dans la colonne'), champ,
+    h('p.aide#aide-wip', 'Au-delà, la colonne est signalée. Laissez vide pour ne fixer aucune limite.'), message,
+    h('div.rangee', h('button.btn.btn-primaire', { type: 'submit' }, 'Enregistrer'),
+      k.wipLimit ? h('button.btn.btn-discret', { type: 'button', onclick: () => { champ.value = ''; d.querySelector('form').requestSubmit(); } }, 'Retirer la limite') : '')));
+  d.addEventListener('close', () => { d.remove(); zoneColonnes.querySelector(`[data-cle="col-menu-${k.id}"]`)?.focus(); });
+  document.body.append(d);
+  d.showModal();
+  champ.focus();
 }
 
 function rendrePiedColonne(k) {

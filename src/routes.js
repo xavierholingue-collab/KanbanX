@@ -4,6 +4,7 @@ import { demanderLien, ouvrirSession, fermerSession } from './auth.js';
 import { cookieSession } from './securite.js';
 import { config } from './config.js';
 import { ErreurHttp } from './erreurs.js';
+import { importerTrello } from './import-trello.js';
 
 export const FLUX = Symbol('flux');
 const nom = (max = 100, required = true) => ({ type: 'string', min: 1, max, required });
@@ -36,6 +37,8 @@ async ({ ctx }) => ({ user: ctx.user, csrf: ctx.csrf ?? null }));
 // --- Tableaux ---
 r('GET', '/api/boards', { tag: 'Tableaux', resume: 'Lister les tableaux auxquels on est invité.' }, ({ ctx }) => S.listerTableaux(ctx));
 r('POST', '/api/boards', { tag: 'Tableaux', resume: 'Créer un tableau (trois colonnes par défaut). Le créateur en est propriétaire.', corps: { name: nom() } }, ({ ctx, body }) => S.creerTableau(ctx, body));
+r('POST', '/api/boards/import-trello', { tag: 'Tableaux', resume: 'Importer un tableau depuis un export JSON de Trello (corps : le fichier JSON tel quel, 10 Mo au plus).', corpsLibre: true, maxCorps: 10_000_000 },
+({ ctx, body }) => importerTrello(ctx, body));
 r('GET', '/api/boards/:id', { tag: 'Tableaux', resume: 'Lire un tableau complet : colonnes, cartes, membres, étiquettes.' }, ({ ctx, params }) => S.obtenirTableau(ctx, params.id));
 r('PATCH', '/api/boards/:id', { tag: 'Tableaux', resume: 'Renommer un tableau (propriétaire).', corps: { name: nom() } }, ({ ctx, params, body }) => S.renommerTableau(ctx, params.id, body));
 
