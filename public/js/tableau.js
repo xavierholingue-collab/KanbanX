@@ -177,11 +177,11 @@ function rendreBarre() {
     h('div.filtres', { role: 'search', 'aria-label': 'Filtrer les cartes' },
       h('div.recherche', icone('recherche'), recherche),
       h('select.champ', { 'aria-label': 'Filtrer par membre', 'data-cle': 'f-membre', onchange: (e) => { f.membre = e.target.value; appliquerFiltres(); rendreBarre(); } },
-        h('option', { value: '' }, 'Tous les membres'), h('option', { value: 'aucun', selected: f.membre === 'aucun' }, 'Sans responsable'), optionsMembres),
+        h('option', { value: '' }, 'Membres : tous'), h('option', { value: 'aucun', selected: f.membre === 'aucun' }, 'Sans responsable'), optionsMembres),
       h('select.champ', { 'aria-label': 'Filtrer par étiquette', 'data-cle': 'f-etiq', onchange: (e) => { f.etiquette = e.target.value; appliquerFiltres(); rendreBarre(); } },
-        h('option', { value: '' }, 'Toutes les étiquettes'), optionsEtiq),
+        h('option', { value: '' }, 'Étiquettes : toutes'), optionsEtiq),
       h('select.champ', { 'aria-label': 'Filtrer par échéance', 'data-cle': 'f-ech', onchange: (e) => { f.echeance = e.target.value; appliquerFiltres(); rendreBarre(); } },
-        ...[['', 'Toutes les échéances'], ['retard', 'En retard'], ['semaine', 'Dans les 7 jours'], ['avec', 'Avec échéance'], ['sans', 'Sans échéance']]
+        ...[['', 'Échéances : toutes'], ['retard', 'En retard'], ['semaine', 'Dans les 7 jours'], ['avec', 'Avec échéance'], ['sans', 'Sans échéance']]
           .map(([v, l]) => h('option', { value: v, selected: f.echeance === v }, l))),
       h('span.compte-filtre#compte-filtre', { role: 'status' }),
       h('button.btn.btn-discret#effacer-filtres', { type: 'button', hidden: !filtreActif, onclick: () => { T.filtres = { texte: '', membre: '', etiquette: '', echeance: '' }; rendre(); document.getElementById('recherche')?.focus(); } }, 'Effacer les filtres')),
