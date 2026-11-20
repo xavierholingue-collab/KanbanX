@@ -97,3 +97,26 @@ export async function activiteTableau(ctx, boardId, limite = 50, avant = null) {
     return (await c.query(`${SQL_ACT} where a.board_id = $1 and ($3::bigint is null or a.id < $3) order by a.id desc limit $2`, [boardId, limite, avant])).rows.map(versAct);
   });
 }
+
+const SQL_FIL = `select m.id, m.body, m.mentions, m.created_at, m.card_id, k.title as card_title, b.id as board_id, b.name as board_name,
+    u.id as uid, u.name, u.kind
+  from comments m join users u on u.id = m.author_id join cards k on k.id = m.card_id join boards b on b.id = m.board_id`;
+const versFil = (r) => ({ id: r.id, body: r.body, createdAt: r.created_at, author: { id: r.uid, name: r.name, kind: r.kind },
+  card: { id: r.card_id, title: r.card_title }, board: { id: r.board_id, name: r.board_name } });
+
+/** Commentaires qui mentionnent l'utilisateur, dans les tableaux auxquels il a accès (RLS), du plus récent au plus ancien. */
+export async function mentionsDe(ctx, limite = 20) {
+  return agir(ctx, async (c) => (await c.query(
+    `${SQL_FIL} where $1 = any(m.mentions) and m.deleted_at is null and k.archived_at is null and b.archived_at is null order by m.created_at desc limit $2`,
+    [ctx.user.id, limite])).rows.map(versFil));
+}
+
+/** Commentaires récents (tous les tableaux accessibles, ou un seul). */
+export async function commentairesRecents(ctx, { boardId = null, limite = 20 } = {}) {
+  return agir(ctx, async (c) => {
+    if (boardId) await roleSur(c, boardId);
+    return (await c.query(
+      `${SQL_FIL} where m.deleted_at is null and k.archived_at is null and b.archived_at is null and ($1::uuid is null or m.board_id = $1)
+       order by m.created_at desc limit $2`, [boardId, limite])).rows.map(versFil);
+  });
+}

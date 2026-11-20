@@ -66,6 +66,7 @@ function erreurVersReponse(e) {
 async function api(req, res, url) {
   const ip = req.socket.remoteAddress ?? '?';
   if (url.pathname === '/api/openapi.json') return envoyerJson(res, 200, genererOpenApi(tableau));
+  if (url.pathname === '/api/docs') return statique(req, res, new URL('/docs-api.html', 'http://x'));
   const trouve = tableau.find((r) => r.methode === req.method && r.re.test(url.pathname));
   if (!trouve) {
     const autre = tableau.some((r) => r.re.test(url.pathname));

@@ -318,3 +318,8 @@ kbd { font-family: var(--police-mono); font-size: var(--t-s); padding: 0.1em 0.4
 .suggestions .option[aria-selected="true"] { background: var(--c-primaire-pale); outline: 2px solid var(--c-primaire); }
 .dialog-lateral { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: min(26rem, 100vw); border-radius: 0; }
 .dialog-lateral h2 { display: flex; align-items: center; gap: var(--e-2); }
+.doc-routes { list-style: none; padding: 0; display: grid; gap: var(--e-3); }
+.doc-routes li { background: var(--c-surface); padding: var(--e-3); border-radius: var(--rayon-m); box-shadow: var(--ombre-carte); }
+.doc-routes p { margin: 0; }
+.doc-routes pre { font-size: var(--t-xs); overflow-x: auto; background: var(--c-colonne); padding: var(--e-2); border-radius: var(--rayon-s); }
+.methode { font-weight: 700; color: var(--c-primaire); }

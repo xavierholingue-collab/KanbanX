@@ -3,6 +3,8 @@ import * as D from './services-discussions.js';
 import { agir, roleSur } from './services.js';
 import { abonner } from './evenements.js';
 import { FLUX } from './routes.js';
+import { estUuid } from './validation.js';
+import { invalide } from './erreurs.js';
 
 export const routesDiscussions = [];
 function r(methode, chemin, def, handler) { routesDiscussions.push({ methode, chemin, ...def, handler }); }
@@ -19,6 +21,16 @@ r('GET', '/api/cards/:id/activity', { tag: 'Activité', resume: 'Historique d\'u
 r('GET', '/api/boards/:id/activity', { tag: 'Activité', resume: 'Historique d\'un tableau (le plus récent d\'abord).',
   query: [...QLIM, { name: 'before', in: 'query', schema: { type: 'integer' }, description: 'Pagination : identifiants inférieurs à cette valeur.' }] },
 ({ ctx, params, query }) => D.activiteTableau(ctx, params.id, limite(query), /^\d+$/.test(query.get('before') ?? '') ? query.get('before') : null));
+
+r('GET', '/api/mentions', { tag: 'Discussions', resume: 'Commentaires qui me mentionnent, dans mes tableaux (le plus récent d\'abord).', query: QLIM },
+({ ctx, query }) => D.mentionsDe(ctx, limite(query)));
+r('GET', '/api/comments/recent', { tag: 'Discussions', resume: 'Commentaires récents de mes tableaux (ou d\'un tableau : ?boardId=).',
+  query: [...QLIM, { name: 'boardId', in: 'query', schema: { type: 'string', format: 'uuid' } }] },
+({ ctx, query }) => {
+  const b = query.get('boardId');
+  if (b && !estUuid(b)) throw invalide('Identifiant « boardId » invalide.');
+  return D.commentairesRecents(ctx, { boardId: b || null, limite: limite(query) });
+});
 
 r('GET', '/api/boards/:id/events', { tag: 'Direct', resume: 'Flux Server-Sent Events des changements du tableau (événement « maj » : {kind, id, cardId, par}).' },
 async ({ ctx, params, req, res }) => {

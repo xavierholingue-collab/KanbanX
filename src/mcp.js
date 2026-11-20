@@ -1,2 +1,176 @@
-// Remplacé à l'étape P3 (serveur MCP).
-export async function traiterMcp(req, res) { res.writeHead(404); res.end(); }
+// Serveur MCP (Model Context Protocol), transport « Streamable HTTP » : POST /mcp, JSON-RPC 2.0, réponses JSON.
+// Authentification uniquement par jeton d'API (Bearer) : un cookie de navigateur n'est jamais accepté ici.
+// Chaque outil appelle les mêmes services que l'API REST : mêmes droits, même RLS, et l'action est signée (via « mcp »).
+import { authentifier } from './auth.js';
+import * as S from './services.js';
+import * as D from './services-discussions.js';
+import { valider, versJsonSchema } from './validation.js';
+import { ErreurHttp } from './erreurs.js';
+
+const VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
+const VERSION_DEFAUT = '2025-06-18';
+const MAX = 1_000_000;
+
+const id = (description) => ({ type: 'uuid', required: true, description });
+const OUTILS = [
+  {
+    name: 'lister_tableaux', title: 'Lister mes tableaux',
+    description: 'Liste les tableaux KanbanX auxquels tu es invité, avec ton rôle (owner, member, reader).',
+    schema: {}, lecture: true,
+    run: async (ctx) => ({ tableaux: (await S.listerTableaux(ctx)).map((t) => ({ id: t.id, nom: t.name, role: t.role })) }),
+  },
+  {
+    name: 'lire_tableau', title: 'Lire un tableau',
+    description: 'Lit un tableau complet : colonnes (dans l\'ordre), cartes (titre, échéance, responsables, étiquettes, nombre de commentaires), membres et étiquettes. Utilise les identifiants renvoyés pour les autres outils.',
+    schema: { tableau_id: id('Identifiant du tableau') }, lecture: true,
+    run: async (ctx, a) => {
+      const t = await S.obtenirTableau(ctx, a.tableau_id);
+      const nom = (uid) => t.members.find((m) => m.id === uid)?.name ?? uid;
+      const etiq = (lid) => t.labels.find((l) => l.id === lid);
+      return {
+        id: t.id, nom: t.name, role: t.role,
+        membres: t.members.map((m) => ({ id: m.id, nom: m.name, type: m.kind, role: m.role })),
+        etiquettes: t.labels.map((l) => ({ id: l.id, nom: l.name, couleur: l.color })),
+        colonnes: t.columns.map((k) => ({ id: k.id, nom: k.name, limite_wip: k.wipLimit,
+          cartes: k.cards.map((c) => ({ id: c.id, titre: c.title, echeance: c.dueDate, responsables: c.assignees.map(nom),
+            etiquettes: c.labels.map((l) => etiq(l)?.name || etiq(l)?.color).filter(Boolean), commentaires: c.commentCount, a_une_description: c.hasDescription })) })),
+      };
+    },
+    texte: (r) => [`Tableau « ${r.nom} » (ton rôle : ${r.role})`, `Membres : ${r.membres.map((m) => `${m.nom} [${m.role}]`).join(', ')}`,
+      ...r.colonnes.flatMap((k) => [`\n## ${k.nom} (colonne ${k.id})${k.limite_wip ? ` — limite ${k.limite_wip}` : ''}`,
+        ...(k.cartes.length ? k.cartes.map((c) => `- ${c.titre} (carte ${c.id})${c.echeance ? `, échéance ${c.echeance}` : ''}${c.responsables.length ? `, responsables : ${c.responsables.join(', ')}` : ''}${c.etiquettes.length ? `, étiquettes : ${c.etiquettes.join(', ')}` : ''}${c.commentaires ? `, ${c.commentaires} commentaire(s)` : ''}`) : ['(vide)'])])].join('\n'),
+  },
+  {
+    name: 'creer_carte', title: 'Créer une carte',
+    description: 'Crée une carte à la fin d\'une colonne. La description accepte le Markdown.',
+    schema: { colonne_id: id('Colonne où créer la carte'), titre: { type: 'string', min: 1, max: 300, required: true }, description: { type: 'string', max: 20000, trim: false } },
+    run: async (ctx, a) => {
+      const c = await S.creerCarte(ctx, a.colonne_id, { title: a.titre });
+      if (a.description) await S.modifierCarte(ctx, c.id, { description: a.description });
+      return { id: c.id, titre: c.title, colonne_id: c.columnId };
+    },
+  },
+  {
+    name: 'modifier_carte', title: 'Modifier une carte',
+    description: 'Modifie une carte : titre, description (Markdown), échéance (AAAA-MM-JJ, ou null pour l\'effacer), responsables et étiquettes (listes complètes d\'identifiants, qui remplacent les précédentes).',
+    schema: { carte_id: id('Carte à modifier'), titre: { type: 'string', min: 1, max: 300 }, description: { type: 'string', max: 20000, trim: false },
+      echeance: { type: 'date', nullable: true }, responsables: { type: 'uuids', description: 'Identifiants de membres du tableau' }, etiquettes: { type: 'uuids', description: 'Identifiants d\'étiquettes du tableau' } },
+    run: async (ctx, a) => {
+      const c = await S.modifierCarte(ctx, a.carte_id, { title: a.titre, description: a.description, dueDate: a.echeance, assignees: a.responsables, labels: a.etiquettes });
+      return { id: c.id, titre: c.title, echeance: c.dueDate, responsables: c.assignees, etiquettes: c.labels };
+    },
+  },
+  {
+    name: 'deplacer_carte', title: 'Déplacer une carte',
+    description: 'Déplace une carte vers une colonne (du même tableau), à une position donnée (0 = en haut ; par défaut : en bas).',
+    schema: { carte_id: id('Carte à déplacer'), colonne_id: { type: 'uuid', description: 'Colonne cible (par défaut : la colonne actuelle)' }, position: { type: 'integer', min: 0, max: 10000 } },
+    run: async (ctx, a) => {
+      const c = await S.deplacerCarte(ctx, a.carte_id, { columnId: a.colonne_id, index: a.position ?? 10000 });
+      return { id: c.id, titre: c.title, colonne_id: c.columnId };
+    },
+  },
+  {
+    name: 'ajouter_commentaire', title: 'Commenter une carte',
+    description: 'Ajoute un commentaire (Markdown) au fil de discussion d\'une carte. Mentionne quelqu\'un avec @prénom.',
+    schema: { carte_id: id('Carte à commenter'), texte: { type: 'string', min: 1, max: 10000, required: true, trim: false } },
+    run: async (ctx, a) => {
+      const c = await D.ajouterCommentaire(ctx, a.carte_id, { body: a.texte });
+      return { id: c.id, carte_id: c.cardId, mentions: c.mentions };
+    },
+  },
+  {
+    name: 'lire_commentaires_recents', title: 'Lire les commentaires récents',
+    description: 'Commentaires les plus récents de tous tes tableaux, ou d\'un seul tableau. Pour suivre où en sont les discussions.',
+    schema: { tableau_id: { type: 'uuid' }, limite: { type: 'integer', min: 1, max: 100 } }, lecture: true,
+    run: async (ctx, a) => ({ commentaires: (await D.commentairesRecents(ctx, { boardId: a.tableau_id ?? null, limite: a.limite ?? 20 })).map(versFil) }),
+  },
+  {
+    name: 'lire_mentions', title: 'Lire mes mentions',
+    description: 'Commentaires qui te mentionnent (@prénom), du plus récent au plus ancien : ce qu\'on attend de toi.',
+    schema: { limite: { type: 'integer', min: 1, max: 100 } }, lecture: true,
+    run: async (ctx, a) => ({ mentions: (await D.mentionsDe(ctx, a.limite ?? 20)).map(versFil) }),
+  },
+];
+function versFil(m) {
+  return { id: m.id, texte: m.body, auteur: m.author.name, date: m.createdAt, carte: { id: m.card.id, titre: m.card.title }, tableau: { id: m.board.id, nom: m.board.name } };
+}
+
+const reponse = (res, status, corps, entetes = {}) => {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...entetes });
+  res.end(corps === null ? undefined : JSON.stringify(corps));
+};
+const erreurRpc = (idReq, code, message) => ({ jsonrpc: '2.0', id: idReq ?? null, error: { code, message } });
+
+async function appelerOutil(ctx, params) {
+  const outil = OUTILS.find((o) => o.name === params?.name);
+  if (!outil) return { erreurRpc: [-32602, `Outil inconnu : ${params?.name}`] };
+  try {
+    const args = valider(outil.schema, params.arguments ?? {});
+    const r = await outil.run(ctx, args);
+    return { content: [{ type: 'text', text: outil.texte ? outil.texte(r) : JSON.stringify(r, null, 2) }], structuredContent: r, isError: false };
+  } catch (e) {
+    let message;
+    if (e instanceof ErreurHttp) message = e.message;
+    else if (e.code === '23503') message = 'Référence invalide (élément inexistant ou d\'un autre tableau).';
+    else if (e.code === '42501') message = 'Droits insuffisants.';
+    else if (['22P02', '23514', '22001', '22007', '22008'].includes(e.code)) message = 'Valeur invalide.';
+    else { console.error('Erreur MCP :', e); message = 'Erreur interne.'; }
+    return { content: [{ type: 'text', text: `Erreur : ${message}` }], isError: true };
+  }
+}
+
+export async function traiterMcp(req, res, { limiter, memeOrigine }) {
+  if (!memeOrigine(req)) return reponse(res, 403, erreurRpc(null, -32000, 'Origine refusée.'));
+  if (req.method !== 'POST') return reponse(res, 405, erreurRpc(null, -32000, 'Méthode non autorisée : utilisez POST.'), { Allow: 'POST' });
+  const v = req.headers['mcp-protocol-version'];
+  if (v && !VERSIONS.includes(v)) return reponse(res, 400, erreurRpc(null, -32000, `Version de protocole non prise en charge : ${v}`));
+
+  // Jeton d'API uniquement.
+  const ctx = req.headers.authorization ? await authentifier(req) : null;
+  if (!ctx || ctx.parCookie) {
+    return reponse(res, 401, erreurRpc(null, -32001, 'Jeton d\'API requis (Authorization: Bearer kbx_…).'), { 'WWW-Authenticate': 'Bearer realm="kanbanx"' });
+  }
+  ctx.via = 'mcp';
+  const l = limiter(`api:${ctx.user.id}`, 600, 60_000);
+  if (!l.ok) return reponse(res, 429, erreurRpc(null, -32000, 'Trop de requêtes.'), { 'Retry-After': String(l.reessayerDansS) });
+
+  const morceaux = []; let n = 0;
+  for await (const m of req) { n += m.length; if (n > MAX) return reponse(res, 413, erreurRpc(null, -32600, 'Requête trop volumineuse.')); morceaux.push(m); }
+  let msg;
+  try { msg = JSON.parse(Buffer.concat(morceaux).toString('utf8')); } catch { return reponse(res, 400, erreurRpc(null, -32700, 'JSON invalide.')); }
+  if (Array.isArray(msg) || msg?.jsonrpc !== '2.0' || typeof msg.method !== 'string') {
+    // Réponses ou lots envoyés par un client : non pris en charge (pas de requêtes serveur → client ici).
+    if (msg && !Array.isArray(msg) && msg.jsonrpc === '2.0' && ('result' in msg || 'error' in msg)) return reponse(res, 202, null);
+    return reponse(res, 400, erreurRpc(msg?.id, -32600, 'Requête JSON-RPC invalide.'));
+  }
+  const notification = !('id' in msg);
+  if (notification) return reponse(res, 202, null);
+
+  let resultat;
+  switch (msg.method) {
+    case 'initialize': {
+      const demandee = msg.params?.protocolVersion;
+      resultat = {
+        protocolVersion: VERSIONS.includes(demandee) ? demandee : VERSION_DEFAUT,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: 'kanbanx', title: 'KanbanX', version: '1.0.0' },
+        instructions: `Tu es connecté à KanbanX en tant que « ${ctx.user.name} ». Commence par lire_mentions pour voir ce qu'on attend de toi, puis lister_tableaux et lire_tableau. Chacune de tes actions est signée de ton nom dans l'historique.`,
+      };
+      break;
+    }
+    case 'ping': resultat = {}; break;
+    case 'tools/list':
+      resultat = { tools: OUTILS.map((o) => ({ name: o.name, title: o.title, description: o.description, inputSchema: versJsonSchema(o.schema),
+        annotations: { readOnlyHint: !!o.lecture, destructiveHint: false, openWorldHint: false } })) };
+      break;
+    case 'tools/call': {
+      const r = await appelerOutil(ctx, msg.params);
+      if (r.erreurRpc) return reponse(res, 200, erreurRpc(msg.id, ...r.erreurRpc));
+      resultat = r;
+      break;
+    }
+    default:
+      return reponse(res, 200, erreurRpc(msg.id, -32601, `Méthode inconnue : ${msg.method}`));
+  }
+  return reponse(res, 200, { jsonrpc: '2.0', id: msg.id, result: resultat });
+}
