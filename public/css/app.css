@@ -205,8 +205,8 @@ dialog::backdrop { background: var(--c-voile); }
 .propriete h4 { margin: 0 0 var(--e-1); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-texte-doux); }
 .actions-laterales { display: grid; gap: var(--e-2); align-content: start; }
 .actions-laterales h3 { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-texte-doux); margin-top: var(--e-2); }
-.actions-laterales .btn { justify-content: flex-start; background: var(--c-colonne); border-color: var(--c-bordure); width: 100%; }
-.actions-laterales .btn:hover { background: var(--c-primaire-pale); }
+.actions-laterales > .btn, .actions-laterales > .popover > .btn { justify-content: flex-start; background: var(--c-colonne); border-color: var(--c-bordure); width: 100%; }
+.actions-laterales > .btn:hover, .actions-laterales > .popover > .btn:hover { background: var(--c-primaire-pale); }
 .markdown { overflow-wrap: anywhere; }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }

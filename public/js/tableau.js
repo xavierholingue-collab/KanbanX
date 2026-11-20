@@ -170,8 +170,8 @@ function rendreBarre() {
   zoneBarre.replaceChildren(
     titre,
     t.role === 'reader' ? h('span.badge', ROLES.reader) : '',
-    h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'membres', onclick: () => ouvrirMembres(T), 'aria-label': `Membres du tableau (${t.members.length})` },
-      h('span.avatars', t.members.slice(0, 4).map(avatar)), h('span', `Membres`)),
+    h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'membres', onclick: () => ouvrirMembres(T) },
+      h('span.avatars', t.members.slice(0, 4).map(avatar)), h('span', 'Membres'), h('span.visuellement-cache', ` du tableau (${t.members.length})`)),
     h('div.filtres', { role: 'search', 'aria-label': 'Filtrer les cartes' },
       h('div.recherche', icone('recherche'), recherche),
       h('select.champ', { 'aria-label': 'Filtrer par membre', 'data-cle': 'f-membre', onchange: (e) => { f.membre = e.target.value; appliquerFiltres(); rendreBarre(); } },

@@ -17,8 +17,8 @@ export async function environnement() {
 }
 
 /** Ouvre un contexte (ordinateur ou téléphone) et connecte l'utilisateur par le vrai parcours du lien magique. */
-export async function connecter(env, utilisateur, { telephone = false } = {}) {
-  const ctx = await env.navigateur.newContext({ ...(telephone ? devices['Pixel 7'] : { viewport: { width: 1366, height: 820 } }), locale: 'fr-FR', timezoneId: 'Europe/Paris', reducedMotion: 'reduce' });
+export async function connecter(env, utilisateur, { telephone = false, sombre = false } = {}) {
+  const ctx = await env.navigateur.newContext({ ...(telephone ? devices['Pixel 7'] : { viewport: { width: 1366, height: 820 } }), locale: 'fr-FR', timezoneId: 'Europe/Paris', reducedMotion: 'reduce', colorScheme: sombre ? 'dark' : 'light' });
   const page = await ctx.newPage();
   const erreurs = [];
   page.on('pageerror', (e) => erreurs.push(e.message));
