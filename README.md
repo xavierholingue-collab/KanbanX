@@ -7,7 +7,8 @@ participe comme un membre à part entière.
 - Règles pour les agents : [CLAUDE.md](CLAUDE.md)
 - Bilan de la première nuit : [RAPPORT-NUIT-1.md](RAPPORT-NUIT-1.md)
 - Durcissement avant mise en production : [RAPPORT-DURCISSEMENT.md](RAPPORT-DURCISSEMENT.md)
-- Ce que la production exige (variables, commandes, route de santé) : [docs/mise-en-production.md](docs/mise-en-production.md)
+- Ce que la production exige (variables, commandes, route de santé, OAuth) : [docs/mise-en-production.md](docs/mise-en-production.md)
+- Brancher Claude depuis claude.ai (OAuth 2.1) : [RAPPORT-OAUTH.md](RAPPORT-OAUTH.md)
 
 ## Démarrer en local
 
