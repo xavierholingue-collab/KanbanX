@@ -240,6 +240,7 @@ export async function creerCarte(ctx, colonneId, { title }) {
   return agir(ctx, async (c, emit) => {
     const k = await lireColonne(c, colonneId);
     await roleEcriture(c, k.board_id);
+    if (k.archived_at) throw invalide('Cette colonne est archivée : restaurez-la avant d\'y ajouter une carte.');
     const { rows: p } = await c.query('select coalesce(max(position), 0) + $2 as p from cards where column_id = $1', [colonneId, PAS]);
     const { rows } = await c.query('insert into cards (board_id, column_id, title, position, created_by) values ($1, $2, $3, $4, $5) returning id',
       [k.board_id, colonneId, title, p[0].p, ctx.user.id]);
@@ -297,6 +298,7 @@ export async function deplacerCarte(ctx, id, { columnId, index }) {
     await roleEcriture(c, b.board_id);
     const cible = await lireColonne(c, columnId ?? b.column_id);
     if (cible.board_id !== b.board_id) throw invalide('Colonne d\'un autre tableau.');
+    if (cible.archived_at) throw invalide('Cette colonne est archivée : restaurez-la avant d\'y déplacer une carte.');
     const pos = await positionCarte(c, cible.id, index, id);
     await c.query('update cards set column_id = $2, position = $3, updated_at = now() where id = $1', [id, cible.id, pos]);
     const ancienne = b.column_id !== cible.id ? (await lireColonne(c, b.column_id)).name : null;

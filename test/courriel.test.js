@@ -34,7 +34,8 @@ function fauxSmtp() {
 test('le lien magique part par SMTP quand SMTP_URL est défini', async () => {
   const { s, recu, port } = await fauxSmtp();
   const avant = config.smtpUrl;
-  config.smtpUrl = `smtp://utilisateur:secret-de-test@127.0.0.1:${port}`;
+  // Faux serveur sans TLS : autorisé uniquement hors production, et explicitement (?tls=non).
+  config.smtpUrl = `smtp://utilisateur:secret-de-test@127.0.0.1:${port}?tls=non`;
   try {
     await envoyerLien('xavier@exemple.invalid', 'http://localhost:3000/connexion/verifier?token=abc');
   } finally { config.smtpUrl = avant; s.close(); }
@@ -42,6 +43,28 @@ test('le lien magique part par SMTP quand SMTP_URL est défini', async () => {
   assert.ok(recu.commandes.some((c) => c.startsWith('AUTH PLAIN ')));
   assert.match(recu.data, /Subject: Votre lien de connexion KanbanX/);
   assert.match(recu.data, /token=abc/);
+});
+
+test('sans TLS, rien ne part : ni identifiants, ni destinataire, ni lien', async () => {
+  const { s, recu, port } = await fauxSmtp();
+  const avant = config.smtpUrl;
+  config.smtpUrl = `smtp://utilisateur:secret-de-test@127.0.0.1:${port}`;
+  try {
+    await assert.rejects(envoyerLien('xavier@exemple.invalid', 'http://localhost:3000/connexion/verifier?token=abc'), /TLS/);
+  } finally { config.smtpUrl = avant; s.close(); }
+  assert.ok(!recu.commandes.some((c) => /^(AUTH|MAIL|RCPT|DATA)/.test(c)), JSON.stringify(recu.commandes));
+  assert.equal(recu.data, '');
+});
+
+test('en production, un SMTP sans TLS est refusé même avec ?tls=non', async () => {
+  const { s, recu, port } = await fauxSmtp();
+  const [avantUrl, avantEnv] = [config.smtpUrl, config.env];
+  config.smtpUrl = `smtp://utilisateur:secret-de-test@127.0.0.1:${port}?tls=non`;
+  config.env = 'production';
+  try {
+    await assert.rejects(envoyerLien('xavier@exemple.invalid', 'x'), /TLS/);
+  } finally { config.smtpUrl = avantUrl; config.env = avantEnv; s.close(); }
+  assert.ok(!recu.commandes.some((c) => /^(AUTH|MAIL|RCPT|DATA)/.test(c)));
 });
 
 test('aucune injection d\'en-tête par l\'adresse du destinataire', async () => {

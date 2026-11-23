@@ -1,5 +1,13 @@
 // Diffusion en direct (Server-Sent Events) aux membres connectés d'un tableau. En mémoire : un seul processus.
+export const MAX_FLUX_PAR_UTILISATEUR = 10;
 const abonnes = new Map(); // boardId -> Set<{res, userId}>
+
+/** Nombre de flux ouverts par un utilisateur, tous tableaux confondus. */
+export function nbFluxUtilisateur(userId) {
+  let n = 0;
+  for (const subs of abonnes.values()) for (const a of subs) if (a.userId === userId) n++;
+  return n;
+}
 
 export function abonner(boardId, res, userId) {
   if (!abonnes.has(boardId)) abonnes.set(boardId, new Set());

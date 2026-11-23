@@ -2,7 +2,7 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EN_TETES, limiter, egalSur } from './securite.js';
+import { EN_TETES, limiter, egalSur, ipClient } from './securite.js';
 import { authentifier } from './auth.js';
 import { ErreurHttp, invalide } from './erreurs.js';
 import { valider, estUuid } from './validation.js';
@@ -10,6 +10,7 @@ import { routes, FLUX } from './routes.js';
 import { routesDiscussions } from './routes-discussions.js';
 import { genererOpenApi } from './openapi.js';
 import { traiterMcp } from './mcp.js';
+import { config } from './config.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -51,13 +52,20 @@ function memeOrigine(req) {
   try { return new URL(o).host === req.headers.host; } catch { return false; }
 }
 
+// Messages des contraintes posées par la base (migrations 003 et 004).
+const CONTRAINTES = {
+  un_proprietaire: 'Un tableau doit toujours avoir au moins un propriétaire.',
+  agent_non_proprietaire: 'Un agent ne peut pas être propriétaire d\'un tableau.',
+};
+
 function erreurVersReponse(e) {
   if (e instanceof ErreurHttp) return e;
+  if (e instanceof URIError) return new ErreurHttp(400, 'requete_invalide', 'Adresse mal formée.');
   // Erreurs PostgreSQL connues : jamais de message interne renvoyé au client.
   switch (e.code) {
     case '42501': return new ErreurHttp(403, 'interdit', 'Droits insuffisants.');
     case '23514':
-      if (e.constraint === 'un_proprietaire') return new ErreurHttp(400, 'requete_invalide', 'Un tableau doit toujours avoir au moins un propriétaire.');
+      if (CONTRAINTES[e.constraint]) return new ErreurHttp(400, 'requete_invalide', CONTRAINTES[e.constraint]);
       return new ErreurHttp(400, 'requete_invalide', 'Valeur invalide.');
     case '23503': return new ErreurHttp(400, 'reference_invalide', 'Référence invalide (élément inexistant ou d\'un autre tableau).');
     case '22P02': case '22023': case '22001': case '22007': case '22008': return new ErreurHttp(400, 'requete_invalide', 'Valeur invalide.');
@@ -67,7 +75,7 @@ function erreurVersReponse(e) {
 }
 
 async function api(req, res, url) {
-  const ip = req.socket.remoteAddress ?? '?';
+  const ip = ipClient(req, config.trustProxy);
   if (url.pathname === '/api/openapi.json') return envoyerJson(res, 200, genererOpenApi(tableau));
   if (url.pathname === '/api/docs') return statique(req, res, new URL('/docs-api.html', 'http://x'));
   const trouve = tableau.find((r) => r.methode === req.method && r.re.test(url.pathname));
@@ -134,6 +142,8 @@ async function statique(req, res, url) {
 export function creerServeur() {
   const s = http.createServer(async (req, res) => {
     for (const [k, v] of Object.entries(EN_TETES)) res.setHeader(k, v);
+    // HSTS uniquement quand l'adresse publique est en HTTPS (jamais en développement sur http://localhost).
+    if (config.baseUrl.startsWith('https://')) res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
     try {
       const url = new URL(req.url, 'http://x');
       if (url.pathname === '/mcp') await traiterMcp(req, res, { limiter, memeOrigine });
