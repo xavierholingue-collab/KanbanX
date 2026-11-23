@@ -16,6 +16,7 @@ if (config.env === 'production') {
   let pbRole;
   try { pbRole = await verifierRoleApplicatif(pool); } catch (e) { refuser([`Base de données inaccessible (${e.message}).`]); }
   if (pbRole.length) refuser(pbRole);
+  if (!config.trustProxy) console.warn('Attention : TRUST_PROXY n\'est pas activé. Derrière un proxy inverse, toutes les requêtes sembleraient venir de la même adresse.');
 } else if (config.env !== 'test') {
   // En développement : migrations et données de démonstration au démarrage, pour la simplicité.
   const { migrer } = await import('../scripts/migrer.js');

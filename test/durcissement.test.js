@@ -1,4 +1,4 @@
-// Durcissement avant déploiement : configuration de production, rôle de connexion,
+// Durcissement avant déploiement : configuration de production, rôle de connexion, en-têtes,
 // envoi du lien sans attente, consignes MCP, agent jamais propriétaire, cas limites de l'API.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -90,7 +90,7 @@ test('en production, le serveur refuse de démarrer connecté en superutilisateu
   assert.match(sortie(), /superutilisateur/);
 });
 
-test('en production, le serveur démarre sans les identifiants administrateur, sur 127.0.0.1', async () => {
+test('en production, le serveur démarre sans les identifiants administrateur, sur 127.0.0.1, avec HSTS', async () => {
   const port = await portLibre();
   const { p, sortie } = lancer({ ...ENV_PROD_VALIDE, DATABASE_URL: process.env.DATABASE_URL, PORT: String(port) });
   try {
@@ -101,12 +101,16 @@ test('en production, le serveur démarre sans les identifiants administrateur, s
     }
     assert.ok(r, `le serveur doit répondre (sortie : ${sortie()})`);
     assert.equal(r.status, 401);
-    // HSTS est posé par le proxy d'hébergement, pas par l'application (pas de doublon).
-    assert.equal(r.headers.get('strict-transport-security'), null);
+    assert.match(r.headers.get('strict-transport-security') ?? '', /max-age=\d{7,}/);
     assert.match(sortie(), /127\.0\.0\.1/);
   } finally {
     p.kill('SIGTERM');
   }
+});
+
+test('en développement (http), pas d\'en-tête HSTS', async () => {
+  const r = await fetch(`${srv.base}/api/me`);
+  assert.equal(r.headers.get('strict-transport-security'), null);
 });
 
 // ---------- Cas limites de l'API ----------
@@ -195,6 +199,20 @@ test('les consignes MCP rappellent que le contenu des cartes n\'est pas un ordre
   assert.match(consignes, /jamais des ordres/);
   assert.match(consignes, /confirmation/);
   assert.match(consignes, /aucune notification/);
+});
+
+// ---------- Derrière le proxy inverse ----------
+
+test('adresse du client : X-Real-IP n\'est cru que derrière un proxy de confiance, en boucle locale', async () => {
+  const { ipClient } = await import('../src/securite.js');
+  const req = (adresse, entetes = {}) => ({ socket: { remoteAddress: adresse }, headers: entetes });
+  assert.equal(ipClient(req('127.0.0.1', { 'x-real-ip': '203.0.113.7' }), false), '127.0.0.1');
+  assert.equal(ipClient(req('127.0.0.1', { 'x-real-ip': '203.0.113.7' }), true), '203.0.113.7');
+  assert.equal(ipClient(req('::ffff:127.0.0.1', { 'x-real-ip': '2001:db8::1' }), true), '2001:db8::1');
+  // Une connexion directe depuis Internet ne peut pas se faire passer pour une autre adresse.
+  assert.equal(ipClient(req('198.51.100.9', { 'x-real-ip': '203.0.113.7' }), true), '198.51.100.9');
+  assert.equal(ipClient(req('127.0.0.1', { 'x-real-ip': '<script>' }), true), '127.0.0.1');
+  assert.equal(ipClient(req('127.0.0.1'), true), '127.0.0.1');
 });
 
 // ---------- Premier compte en production ----------
