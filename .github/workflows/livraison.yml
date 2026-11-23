@@ -1,0 +1,356 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Livraison de KanbanX — tenu par InfraLWS (23/11/2026)
+#
+#  Le dossier .github/ est tenu par InfraLWS (règle de CLAUDE.md) : pour
+#  changer un contrôle, passer par Xavier.
+#
+#  TROIS EMPLOIS
+#    controles   à chaque envoi et à chaque demande de fusion : npm test
+#                (tests et parcours dans un vrai navigateur) contre un
+#                PostgreSQL 18.6, sous Node 22 (la production) et Node 26 (la
+#                cible du 1er trimestre 2027), puis l'audit des dépendances.
+#                Ne détient aucun secret.
+#    paquet      le paquet que deployer-kanbanx recevra, construit depuis le
+#                verrou, contrôlé avec ses règles, puis DÉMARRÉ EN PRODUCTION À
+#                BLANC dans les conditions du serveur (propriétaire ordinaire,
+#                rôle applicatif créé d'avance, NODE_ENV=production) : un
+#                fichier oublié dans le paquet se voit ici, pas sur le VPS.
+#    production  sur « main » seulement, après un paquet vert : l'envoie à la
+#                commande forcée deployer-kanbanx, puis vérifie en ligne que
+#                /api/sante répond 200 AVEC CE COMMIT, que les en-têtes de
+#                sécurité sont là et une seule fois, que l'API ferme sans
+#                session et que http:// renvoie vers https://.
+#
+#  CONVENTIONS DE LA MACHINE (mémoire infra_chaines_livraison) : coureur
+#  ubuntu-26.04 et non ubuntu-latest ; Node 22 comme la production ;
+#  PostgreSQL 18.6 comme la production ; actions épinglées par empreinte de
+#  commit (la version lisible en commentaire) ; permissions minimales ; aucun
+#  identifiant git laissé dans le coureur.
+#
+#  DÉPÔT PUBLIC : jamais de pull_request_target. Une demande de fusion venue
+#  d'un fork joue « controles » et « paquet » sans aucun secret ; seul
+#  « production », réservé à main par l'environnement, en détient.
+#
+#  SECRETS (environnement GitHub « production », réservé à main, posés par
+#  InfraLWS/corrections/poste-cle-kanbanx.sh) :
+#    CLEF_DEPLOIEMENT  clef SSH bridée par restrict,command=deployer-kanbanx
+#    HOTE_CONNU        (variable) la clef d'hôte du VPS : aucune confiance
+#                      accordée au premier venu qui répondrait à cette adresse
+# ═══════════════════════════════════════════════════════════════════════════
+name: Livraison
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: livraison-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # « bash -eo pipefail » : un « | tee » ne peut pas masquer un échec.
+    shell: bash
+
+jobs:
+  controles:
+    name: Contrôles — Node ${{ matrix.node }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # La production : tests ET parcours dans un vrai navigateur.
+          - node: 22
+            sans_navigateur: ""
+          # La cible de 2027 : les tests, sans le navigateur.
+          - node: 26
+            sans_navigateur: "1"
+    services:
+      postgres:
+        # La version de la production (18.6, grappe 18-main). À monter avec elle.
+        image: postgres:18.6
+        env:
+          POSTGRES_PASSWORD: test_jetable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      # scripts/test.js crée sur ce serveur une base jetable, y joue les
+      # migrations et la détruit à la fin.
+      TEST_ADMIN_URL: postgres://postgres:test_jetable@127.0.0.1:5432/postgres
+      SANS_NAVIGATEUR: ${{ matrix.sans_navigateur }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # Exactement les versions du verrou, et aucune dépendance n'exécute de
+      # code à l'installation.
+      - name: Installation du verrou, sans scripts d'installation
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Versions éprouvées
+        run: |
+          echo "Node $(node --version)"
+          node -e "const pg = require('pg'); const c = new pg.Client({ connectionString: process.env.TEST_ADMIN_URL }); c.connect().then(() => c.query('show server_version')).then((r) => { console.log('PostgreSQL ' + r.rows[0].server_version); return c.end(); }).catch((e) => { console.error(e.message); process.exit(1); });"
+
+      - name: Navigateur Chromium pour les parcours (Playwright)
+        if: matrix.sans_navigateur == ''
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests (npm test)
+        run: npm test
+
+      # Le code livré est exposé sur Internet : ses dépendances bloquent dès
+      # « moderate », l'arbre entier dès « high ».
+      - name: Audit des dépendances
+        if: matrix.node == 22
+        run: |
+          echo "== Dépendances livrées, bloquant dès « moderate »"
+          npm audit --omit=dev --audit-level=moderate
+          echo "== Arbre entier, bloquant dès « high »"
+          npm audit --audit-level=high
+
+  paquet:
+    name: Paquet de production, démarré à blanc
+    needs: controles
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_PASSWORD: test_jetable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    outputs:
+      version: ${{ steps.paquet.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # Le paquet que deployer-kanbanx recevra : rien n'est installé ni
+      # construit sur le serveur. Les dépendances de production sont
+      # installées à part depuis le verrou, pour n'emporter qu'elles.
+      - name: Paquet
+        id: paquet
+        run: |
+          P="${RUNNER_TEMP}/paquet"
+          A="${P}/app"
+          mkdir -p "${A}/scripts"
+          cp -r package.json package-lock.json src public migrations "${A}/"
+          cp scripts/migrer.js scripts/compte.js scripts/jeton.js "${A}/scripts/"
+          (cd "${A}" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
+          # Fichiers cachés et dossiers vides que npm laisse : refusés par le serveur.
+          find "${A}/node_modules" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
+          find "${A}/node_modules" -mindepth 1 -type d -empty -delete
+          # Les règles de deployer-kanbanx, vérifiées ici d'abord : un refus en
+          # CI se lit mieux qu'un refus du serveur.
+          for f in package.json package-lock.json src/server.js src/sante.js scripts/migrer.js scripts/compte.js scripts/jeton.js \
+                   public/index.html migrations/001_schema.sql node_modules/pg/package.json; do
+            test -f "${A}/${f}" || { echo "ECHEC : app/${f} absent du paquet"; exit 1; }
+          done
+          for f in src/server.js scripts/migrer.js scripts/compte.js scripts/jeton.js; do node --check "${A}/${f}"; done
+          speciaux=$(find "${P}" ! -type f ! -type d)
+          [ -z "${speciaux}" ] || { echo "ECHEC : liens ou entrées spéciales :"; echo "${speciaux}"; exit 1; }
+          caches=$(find "${P}" -mindepth 1 -name '.*')
+          [ -z "${caches}" ] || { echo "ECHEC : fichiers cachés :"; echo "${caches}"; exit 1; }
+          natifs=$(find "${A}" -type f | grep -iE '\.(node|so|dylib|dll|exe|sh)$' || true)
+          [ -z "${natifs}" ] || { echo "ECHEC : code natif ou exécutable :"; echo "${natifs}"; exit 1; }
+          sql=$(find "${A}" -type f -name '*.sql' ! -path "${A}/migrations/*")
+          [ -z "${sql}" ] || { echo "ECHEC : SQL hors de migrations/ :"; echo "${sql}"; exit 1; }
+          noms=$(cd "${P}" && find . -mindepth 1 | grep -cvxE '\./[A-Za-z0-9_@][A-Za-z0-9_.+-]*(/[A-Za-z0-9_@][A-Za-z0-9_.+-]*)*' || true)
+          [ "${noms}" -eq 0 ] || { echo "ECHEC : ${noms} nom(s) que le serveur refusera"; exit 1; }
+          taille=$(du -sb "${P}" | cut -f1)
+          [ "${taille}" -lt 30000000 ] || { echo "ECHEC : ${taille} octets, au-delà des 30 Mo acceptés"; exit 1; }
+          v=$(node -p "require('${A}/package.json').version")
+          [[ "${v}" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || { echo "ECHEC : version illisible « ${v} »"; exit 1; }
+          echo "version=${v}" >> "${GITHUB_OUTPUT}"
+          echo "paquet conforme : KanbanX ${v}, ${taille} octets, dépendances : $(find "${A}/node_modules" -mindepth 1 -maxdepth 1 -printf '%f ')"
+
+      # Les conditions du serveur : un propriétaire ni superutilisateur ni
+      # CREATEROLE, un rôle applicatif créé d'avance, migrer.js sans
+      # KANBANX_APP_PASSWORD, puis le serveur en NODE_ENV=production, qui
+      # refuse de démarrer sur une configuration fausse. Seule différence
+      # assumée : des mots de passe jetables au lieu de « peer », car la base
+      # tourne dans un conteneur.
+      - name: Démarrage en production à blanc
+        env:
+          ADMIN: postgres://postgres:test_jetable@127.0.0.1:5432/postgres
+        run: |
+          E="${RUNNER_TEMP}/essai"
+          cp -a "${RUNNER_TEMP}/paquet/app" "${E}"
+          cd "${E}"
+          MDP_P="proprio_${RANDOM}${RANDOM}"
+          MDP_A="appli_${RANDOM}${RANDOM}"
+          MDP_P="${MDP_P}" MDP_A="${MDP_A}" node --input-type=module -e "
+            import pg from 'pg';
+            const c = new pg.Client({ connectionString: process.env.ADMIN });
+            await c.connect();
+            await c.query(\"create role kanbanx_proprio login nosuperuser nocreatedb nocreaterole nobypassrls password '\" + process.env.MDP_P + \"'\");
+            await c.query(\"create role kanbanx_app login nosuperuser nocreatedb nocreaterole nobypassrls password '\" + process.env.MDP_A + \"'\");
+            await c.query('create database kanbanx owner kanbanx_proprio');
+            await c.query('grant connect, temporary on database kanbanx to kanbanx_proprio');
+            await c.query('grant connect on database kanbanx to kanbanx_app');
+            await c.query('revoke all on database kanbanx from public');
+            await c.end();
+            const b = new pg.Client({ connectionString: process.env.ADMIN.replace(/\/postgres$/, '/kanbanx') });
+            await b.connect();
+            await b.query('grant usage on schema public to kanbanx_app');
+            await b.query('revoke all on schema public from public');
+            await b.end();
+            console.log('rôles et base créés comme sur le serveur');
+          "
+          DATABASE_ADMIN_URL="postgres://kanbanx_proprio:${MDP_P}@127.0.0.1:5432/kanbanx" node scripts/migrer.js
+          echo "${GITHUB_SHA}" > .commit-deploye
+          NODE_ENV=production HOST=127.0.0.1 PORT=3030 TRUST_PROXY=1 \
+            BASE_URL=https://kanbanx.y-factor.fr \
+            DATABASE_URL="postgres://kanbanx_app:${MDP_A}@127.0.0.1:5432/kanbanx" \
+            SMTP_URL="smtps://resend:re_ci_jamais_utilisee_000000000000@127.0.0.1:465" \
+            SMTP_FROM="KanbanX <kanbanx@y-factor.fr>" \
+            node src/server.js > "${RUNNER_TEMP}/serveur.log" 2>&1 &
+          pid=$!
+          r=""
+          for _ in $(seq 1 30); do
+            sleep 1
+            r=$(curl -s -m 3 http://127.0.0.1:3030/api/sante || true)
+            [[ "${r}" == *'"ok":true'* ]] && break
+          done
+          kill "${pid}" 2>/dev/null || true
+          echo "--- journal du serveur"; cat "${RUNNER_TEMP}/serveur.log"
+          echo "--- /api/sante : ${r}"
+          [[ "${r}" == *"\"commit\":\"${GITHUB_SHA}\""* ]] || { echo "ECHEC : le paquet ne démarre pas en production avec ce commit"; exit 1; }
+          echo "le paquet démarre en production et porte le commit ${GITHUB_SHA:0:7}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paquet
+          path: ${{ runner.temp }}/paquet/
+          if-no-files-found: error
+          retention-days: 7
+
+  production:
+    name: Mise en ligne — kanbanx.y-factor.fr
+    needs: paquet
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+    environment:
+      name: production
+      url: https://kanbanx.y-factor.fr
+    env:
+      HOTE: 195.110.35.206
+      SITE: https://kanbanx.y-factor.fr
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: paquet
+          path: paquet
+
+      # Le marqueur dit QUOI et QUAND. deployer-kanbanx le range hors du code,
+      # et n'en donne au service que le commit (pour /api/sante).
+      - name: Marqueur de livraison et paquet
+        env:
+          VERSION: ${{ needs.paquet.outputs.version }}
+        run: |
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "ref=${GITHUB_REF}"
+            echo "version=${VERSION}"
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "execution=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > paquet/.commit-deploye
+          cat paquet/.commit-deploye
+          tar -C paquet -czf paquet.tar.gz .
+          echo "paquet : $(stat -c %s paquet.tar.gz) octets, $(tar -tzf paquet.tar.gz | grep -c .) entrées"
+
+      - name: Envoi à deployer-kanbanx
+        env:
+          CLEF: ${{ secrets.CLEF_DEPLOIEMENT }}
+          HOTE_CONNU: ${{ vars.HOTE_CONNU }}
+        run: |
+          [ -n "${CLEF}" ] || { echo "ECHEC : secret CLEF_DEPLOIEMENT absent de l'environnement « production »"; exit 1; }
+          [ -n "${HOTE_CONNU}" ] || { echo "ECHEC : variable HOTE_CONNU absente de l'environnement « production »"; exit 1; }
+          install -d -m 700 "${RUNNER_TEMP}/ssh"
+          printf '%s\n' "${CLEF}" > "${RUNNER_TEMP}/ssh/clef"
+          chmod 600 "${RUNNER_TEMP}/ssh/clef"
+          printf '%s\n' "${HOTE_CONNU}" > "${RUNNER_TEMP}/ssh/connus"
+          # « livrer » n'est qu'un mot comparé à une liste fermée sur le serveur :
+          # la clef ne peut lancer que deployer-kanbanx, quoi qu'on lui demande.
+          set +e
+          ssh -i "${RUNNER_TEMP}/ssh/clef" -o IdentitiesOnly=yes -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${RUNNER_TEMP}/ssh/connus" \
+              -o ConnectTimeout=20 "root@${HOTE}" livrer < paquet.tar.gz > livraison.log 2>&1
+          code=$?
+          set -e
+          cat livraison.log
+          exit "${code}"
+
+      - name: Effacer la clef du coureur
+        if: always()
+        run: rm -rf "${RUNNER_TEMP}/ssh"
+
+      - name: En ligne — santé, en-têtes, portes
+        run: |
+          # À la toute première livraison, le certificat peut se faire attendre.
+          code=000
+          for _ in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${SITE}/api/sante" || true)
+            [ "${code}" = 200 ] && break
+            sleep 10
+          done
+          echo "/api/sante : ${code}"
+          [ "${code}" = 200 ] || { echo "ECHEC : attendu 200"; exit 1; }
+          curl -fsS -m 20 -o sante.json "${SITE}/api/sante"
+          python3 -c 'import json, os, sys; d = json.load(open("sante.json")); sys.exit(0 if d.get("ok") is True and d.get("commit") == os.environ["GITHUB_SHA"] and d.get("schema") == "a-jour" else "ECHEC : santé " + json.dumps(d))'
+          echo "santé : ok, schéma à jour, commit ${GITHUB_SHA:0:7} en ligne"
+
+          curl -fsS -m 20 -D entetes.txt -o page.html "${SITE}/"
+          for e in "content-security-policy: default-src 'none'" "strict-transport-security: max-age=" \
+                   "x-content-type-options: nosniff" "x-frame-options: deny" "referrer-policy: no-referrer" \
+                   "cross-origin-opener-policy: same-origin" "x-robots-tag: noindex"; do
+            grep -qi "^${e}" entetes.txt || { echo "ECHEC : en-tête manquant « ${e} »"; exit 1; }
+          done
+          # Une seule fois chacun : l'application et Caddy ne doivent pas se doubler.
+          for e in content-security-policy strict-transport-security; do
+            n=$(grep -ci "^${e}:" entetes.txt || true)
+            [ "${n}" -eq 1 ] || { echo "ECHEC : ${e} présent ${n} fois"; exit 1; }
+          done
+          if grep -qi '^server:' entetes.txt; then echo "ECHEC : l'en-tête Server est exposé"; exit 1; fi
+          echo "en-têtes de sécurité : présents, une seule fois ; pas d'en-tête Server"
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${SITE}/api/me")
+          [ "${code}" = 401 ] || { echo "ECHEC : /api/me sans session répond ${code} au lieu de 401"; exit 1; }
+          echo "API sans session : 401"
+          r=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -m 10 "http://kanbanx.y-factor.fr/")
+          [[ "${r}" == "308 https://kanbanx.y-factor.fr/" ]] || { echo "ECHEC : http:// répond « ${r} » au lieu d'une redirection 308 vers https://"; exit 1; }
+          echo "http:// : redirigé vers https://"
