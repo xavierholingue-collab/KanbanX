@@ -25,7 +25,7 @@ async function recharger(direct = false) {
   const nouveaux = direct && D.commentaires ? c.filter((x) => !D.commentaires.some((y) => y.id === x.id)) : [];
   D.commentaires = c; D.activite = a;
   if (D.conteneur?.isConnected && !D.edition) dessiner();
-  for (const n of nouveaux) annoncer(`Nouveau commentaire de ${n.author.name}.`);
+  for (const n of nouveaux) annoncer(`Nouveau commentaire de ${n.client ? `${n.client} pour ${n.author.name}` : n.author.name}.`);
 }
 
 export function rendreDiscussion(conteneur, carteId, T) {
@@ -87,7 +87,8 @@ function rendreCommentaire(x) {
   return h(`li.commentaire${x.enAttente ? '.en-attente' : ''}`, { 'aria-busy': x.enAttente ? 'true' : undefined },
     avatar(x.author),
     h('div.bulle-conteneur',
-      h('p.auteur', h('strong', x.author.name), x.author.kind === 'agent' ? h('span.badge-agent', 'agent') : '', ' ', horodatage(x.createdAt), x.editedAt ? h('span.vide', ' · modifié') : ''),
+      h('p.auteur', h('strong', x.client ? `${x.client} pour ${x.author.name}` : x.author.name),
+        x.author.kind === 'agent' ? h('span.badge-agent', 'agent') : x.client ? h('span.badge-agent', 'application') : '', ' ', horodatage(x.createdAt), x.editedAt ? h('span.vide', ' · modifié') : ''),
       htmlNettoye(h('div.bulle.markdown'), x.html ?? ''),
       moi && !x.enAttente && ecrit() ? h('div.rangee.actions-comm',
         h('button.btn.btn-discret', { type: 'button', 'data-comm': x.id, onclick: () => { D.edition = { id: x.id, texte: x.body }; dessiner(); } }, 'Modifier'),

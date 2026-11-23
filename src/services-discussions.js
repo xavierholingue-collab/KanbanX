@@ -20,10 +20,11 @@ async function carteVisible(c, cardId) {
   return rows[0];
 }
 
-const SQL_COMM = `select m.id, m.card_id, m.body, m.mentions, m.created_at, m.edited_at, u.id as uid, u.name, u.kind
+const SQL_COMM = `select m.id, m.card_id, m.body, m.mentions, m.created_at, m.edited_at, m.client_name, u.id as uid, u.name, u.kind
   from comments m join users u on u.id = m.author_id`;
+// client : application OAuth qui a écrit au nom de l'auteur (« Claude pour Eric »), sinon null.
 const versComm = (r, ps) => ({ id: r.id, cardId: r.card_id, body: r.body, html: rendreMarkdown(r.body, ps), mentions: r.mentions,
-  createdAt: r.created_at, editedAt: r.edited_at, author: { id: r.uid, name: r.name, kind: r.kind } });
+  createdAt: r.created_at, editedAt: r.edited_at, author: { id: r.uid, name: r.name, kind: r.kind }, client: r.client_name });
 
 export async function listerCommentaires(ctx, cardId) {
   return agir(ctx, async (c) => {
@@ -41,8 +42,8 @@ export async function ajouterCommentaire(ctx, cardId, { body }) {
     exigerEcriture(await roleSur(c, k.board_id));
     const membres = await membresDuTableau(c, k.board_id);
     const mentions = resoudreMentions(body, membres);
-    const { rows } = await c.query('insert into comments (board_id, card_id, author_id, body, mentions) values ($1, $2, $3, $4, $5) returning id',
-      [k.board_id, cardId, ctx.user.id, body, mentions]);
+    const { rows } = await c.query('insert into comments (board_id, card_id, author_id, body, mentions, client_name) values ($1, $2, $3, $4, $5, $6) returning id',
+      [k.board_id, cardId, ctx.user.id, body, mentions, ctx.application ?? null]);
     await journal(c, ctx, k.board_id, cardId, 'commentaire.ajoute', { title: k.title, commentId: rows[0].id, mentions });
     emit(k.board_id, { kind: 'comment', id: rows[0].id, cardId });
     return versComm((await c.query(`${SQL_COMM} where m.id = $1`, [rows[0].id])).rows[0], prenoms(membres));
@@ -78,9 +79,9 @@ export async function supprimerCommentaire(ctx, id, supprimer = true) {
   });
 }
 
-const SQL_ACT = `select a.id, a.action, a.data, a.via, a.created_at, a.card_id, u.id as uid, u.name, u.kind, k.title as card_title
+const SQL_ACT = `select a.id, a.action, a.data, a.via, a.client_name, a.created_at, a.card_id, u.id as uid, u.name, u.kind, k.title as card_title
   from activity a join users u on u.id = a.actor_id left join cards k on k.id = a.card_id`;
-const versAct = (r) => ({ id: Number(r.id), action: r.action, data: r.data, via: r.via, createdAt: r.created_at, cardId: r.card_id,
+const versAct = (r) => ({ id: Number(r.id), action: r.action, data: r.data, via: r.via, client: r.client_name, createdAt: r.created_at, cardId: r.card_id,
   cardTitle: r.card_title, actor: { id: r.uid, name: r.name, kind: r.kind } });
 
 export async function activiteCarte(ctx, cardId, limite = 50) {
@@ -99,9 +100,9 @@ export async function activiteTableau(ctx, boardId, limite = 50, avant = null) {
 }
 
 const SQL_FIL = `select m.id, m.body, m.mentions, m.created_at, m.card_id, k.title as card_title, b.id as board_id, b.name as board_name,
-    u.id as uid, u.name, u.kind
+    m.client_name, u.id as uid, u.name, u.kind
   from comments m join users u on u.id = m.author_id join cards k on k.id = m.card_id join boards b on b.id = m.board_id`;
-const versFil = (r) => ({ id: r.id, body: r.body, createdAt: r.created_at, author: { id: r.uid, name: r.name, kind: r.kind },
+const versFil = (r) => ({ id: r.id, body: r.body, createdAt: r.created_at, author: { id: r.uid, name: r.name, kind: r.kind }, client: r.client_name,
   card: { id: r.card_id, title: r.card_title }, board: { id: r.board_id, name: r.board_name } });
 
 /** Commentaires qui mentionnent l'utilisateur, dans les tableaux auxquels il a accès (RLS), du plus récent au plus ancien. */

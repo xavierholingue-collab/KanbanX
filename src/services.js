@@ -1,4 +1,4 @@
-// Logique métier. Chaque fonction reçoit un contexte { user: {id, name, kind}, via, clientId } et s'exécute dans une
+// Logique métier. Chaque fonction reçoit un contexte { user: {id, name, kind}, via, clientId, application } et s'exécute dans une
 // transaction « comme » l'utilisateur : le code vérifie les droits ET la base les applique (RLS).
 import { transaction } from './db.js';
 import { ErreurHttp, introuvable, interdit, invalide } from './erreurs.js';
@@ -15,8 +15,9 @@ export async function agir(ctx, fn) {
 }
 
 export async function journal(c, ctx, boardId, cardId, action, data = {}) {
-  await c.query('insert into activity (board_id, card_id, actor_id, via, action, data) values ($1, $2, $3, $4, $5, $6)',
-    [boardId, cardId, ctx.user.id, ctx.via ?? 'web', action, data]);
+  // client_name : application OAuth qui agit au nom de l'acteur (« Claude pour Eric »), sinon vide.
+  await c.query('insert into activity (board_id, card_id, actor_id, via, action, data, client_name) values ($1, $2, $3, $4, $5, $6, $7)',
+    [boardId, cardId, ctx.user.id, ctx.via ?? 'web', action, data, ctx.application ?? null]);
 }
 
 /** Rôle de l'utilisateur sur un tableau ; 404 s'il n'y a pas accès (on ne révèle pas l'existence du tableau). */

@@ -4,8 +4,27 @@ import { get, post, definirCsrf, ErreurApi } from './api.js';
 import { erreur, toast } from './toasts.js';
 import { ecranTableau, synchroniserCarte, quitterTableau } from './tableau.js';
 import { installerRaccourcis } from './raccourcis.js';
+import { ecranConsentement, ecranDemandeInvalide, ecranApplications } from './applications.js';
 
 export const etat = { moi: undefined, ecran: null }; // moi : undefined = inconnu, null = non connecté
+
+// Où revenir après la connexion. Gardé dans localStorage (et non sessionStorage) : le lien du courriel s'ouvre
+// souvent dans un nouvel onglet. Seules des adresses internes connues sont reprises, pendant 15 minutes.
+const CLE_APRES = 'kx:apres';
+const apresSur = (c) => typeof c === 'string' && c.length <= 4000
+  && (/^\/b\/[0-9a-f-]{36}(\/c\/[0-9a-f-]{36})?\/?$/.test(c) || /^\/oauth\/authorize\?[^#]*$/.test(c));
+function retenirApres(c) {
+  if (!apresSur(c)) return;
+  try { localStorage.setItem(CLE_APRES, JSON.stringify({ c, t: Date.now() })); } catch { /* stockage indisponible */ }
+}
+function reprendreApres() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLE_APRES) ?? 'null');
+    localStorage.removeItem(CLE_APRES);
+    if (v && Date.now() - v.t < 15 * 60 * 1000 && apresSur(v.c)) return v.c;
+  } catch { /* stockage indisponible ou valeur illisible */ }
+  return null;
+}
 
 export function naviguer(url, { remplacer = false } = {}) {
   if (url === location.pathname + location.search) return rendre();
@@ -28,8 +47,9 @@ function entete() {
     h('a.marque', { href: etat.moi ? '/' : '/connexion' }, logo(), 'KanbanX'),
     h('span.espace'),
     etat.moi && h('span.utilisateur', etat.moi.name),
+    etat.moi && h('a.btn.btn-icone', { href: '/applications', 'aria-label': 'Applications connectées', title: 'Applications connectées' }, icone('robot')),
     etat.moi && h('button.btn.btn-icone', { type: 'button', 'aria-label': 'Raccourcis clavier (?)', title: 'Raccourcis clavier (?)', onclick: () => window.dispatchEvent(new CustomEvent('kx:aide')) }, icone('aide')),
-    etat.moi && h('button.btn', { type: 'button', onclick: deconnexion }, icone('sortie'), h('span', 'Se déconnecter')),
+    etat.moi && h('button.btn', { type: 'button', onclick: deconnexion }, icone('sortie'), h('span.texte-entete', 'Se déconnecter')),
   );
 }
 function logo() {
@@ -61,13 +81,15 @@ async function rendre() {
   if (chemin === '/connexion/verifier') return verifier();
   if (etat.moi === undefined) await chargerMoi();
   entete();
+  if (chemin === '/oauth/authorize') { quitterTableau(); return autorisation(); }
   if (!etat.moi) {
     quitterTableau();
-    if (chemin !== '/connexion') sessionStorage.setItem('kx:apres', chemin);
+    if (chemin !== '/connexion') retenirApres(chemin);
     if (chemin !== '/connexion') history.replaceState(null, '', '/connexion');
     return connexion();
   }
   if (chemin === '/connexion') { history.replaceState(null, '', '/'); return accueil(); }
+  if (chemin === '/applications') { quitterTableau(); etat.ecran = { type: 'applications' }; return ecranApplications(contenu()); }
   if (m) {
     if (etat.ecran?.type === 'tableau' && etat.ecran.id === m[1]) return synchroniserCarte(m[2] ?? null);
     etat.ecran = { type: 'tableau', id: m[1] };
@@ -78,8 +100,27 @@ async function rendre() {
   return accueil();
 }
 
+// ---------- Autorisation d'une application (OAuth) ----------
+async function autorisation() {
+  etat.ecran = { type: 'autorisation' };
+  let demande;
+  try { demande = await get(`/api/oauth/demande${location.search}`); } catch (e) { return ecranDemandeInvalide(contenu(), e.message); }
+  if (!etat.moi) {
+    retenirApres(location.pathname + location.search);
+    return connexion({ intro: `Connectez-vous pour autoriser « ${demande.client.nom} » à accéder à KanbanX.` });
+  }
+  return ecranConsentement(contenu(), demande, etat.moi);
+}
+
 // ---------- Connexion ----------
-function connexion() {
+// Si la connexion se fait dans un autre onglet (lien du courriel), cet onglet la constate en reprenant la main.
+window.addEventListener('focus', async () => {
+  if (etat.ecran?.type !== 'connexion') return;
+  await chargerMoi().catch(() => {});
+  if (etat.moi) rendre();
+});
+
+function connexion({ intro } = {}) {
   etat.ecran = { type: 'connexion' };
   document.title = 'Connexion — KanbanX';
   const email = h('input.champ#email', { type: 'email', name: 'email', autocomplete: 'email', required: true, placeholder: 'prenom@exemple.fr' });
@@ -105,6 +146,7 @@ function connexion() {
   bouton, zoneMessage);
   contenu().replaceChildren(h('div.page', h('section.boite', { 'aria-labelledby': 'titre-connexion' },
     h('h1#titre-connexion', 'Connexion à KanbanX'),
+    intro ? h('p.message', intro) : '',
     h('p.aide', 'KanbanX fonctionne sur invitation. Saisissez votre adresse : nous vous envoyons un lien magique, sans mot de passe.'),
     form)));
   email.focus();
@@ -120,9 +162,7 @@ async function verifier() {
     const r = await post('/api/auth/verifier', { token });
     definirCsrf(r.csrf);
     etat.moi = undefined;
-    const apres = sessionStorage.getItem('kx:apres');
-    sessionStorage.removeItem('kx:apres');
-    naviguer(apres && apres.startsWith('/b/') ? apres : '/', { remplacer: true });
+    naviguer(reprendreApres() ?? '/', { remplacer: true });
   } catch (e) {
     contenu().replaceChildren(h('div.page', h('section.boite',
       h('h1', 'Lien invalide'), h('p.message.message-erreur', { role: 'alert' }, e.message),

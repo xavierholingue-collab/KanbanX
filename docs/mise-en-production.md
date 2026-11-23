@@ -63,7 +63,21 @@ depuis l'application. Un agent n'est jamais propriétaire d'un tableau : la base
 `commit` est lu dans le fichier `.commit-deploye` à la racine du paquet (écrit par la chaîne de livraison) ;
 sans ce fichier, il vaut `dev`. La route ne renvoie aucune donnée, aucun compteur, aucun détail d'erreur.
 
-## 5. Ordre d'une livraison
+## 5. Branchement de Claude (OAuth 2.1)
+
+Rien à configurer : pas de variable, pas de secret. Le serveur d'autorisation fait partie de l'application et
+se déduit de `BASE_URL`. Le proxy transmet tels quels, sans cache :
+
+- `/.well-known/oauth-protected-resource`, `/.well-known/oauth-protected-resource/mcp` et
+  `/.well-known/oauth-authorization-server` (métadonnées, RFC 9728 et RFC 8414) ;
+- `/oauth/register`, `/oauth/authorize`, `/oauth/token` ;
+- `/mcp`, qui répond `401` avec `WWW-Authenticate: Bearer resource_metadata="…"` sans jeton valable.
+
+Les serveurs de Claude viennent de la plage `160.79.104.0/21` : elle ne doit pas être bloquée. Côté personne,
+on ajoute dans Claude un connecteur personnalisé d'adresse `https://kanbanx.y-factor.fr/mcp`, puis on se
+connecte et on donne son accord. La page « Applications connectées » de KanbanX permet de retirer un accès.
+
+## 6. Ordre d'une livraison
 
 1. Sauvegarde de la base.
 2. Migrations : `npm run db:migrer`.
@@ -73,11 +87,12 @@ sans ce fichier, il vaut `dev`. La route ne renvoie aucune donnée, aucun compte
 Les migrations ne font qu'ajouter (règle dans `CLAUDE.md`) : la version précédente du code tourne sur le
 nouveau schéma. Le retour arrière consiste donc à relancer le code précédent, sans restaurer la base.
 
-## 6. Limites connues de cette version
+## 7. Limites connues de cette version
 
 - **Un seul processus**, pour les raisons données plus haut.
 - **Flux en direct.** Un flux déjà ouvert n'est pas recontrôlé quand la session expire. Il est coupé quand le
   membre est retiré du tableau.
-- **Jetons d'API.** Ils n'expirent pas : la révocation se fait en en recréant un avec `npm run jeton`.
-- **Serveur MCP** (`/mcp`) : accessible par jeton d'API (`Authorization: Bearer kbx_…`), depuis Claude Code.
-  Le branchement à claude.ai demande OAuth 2.1, prévu dans un lot séparé.
+- **Jetons d'API** (compte agent, `kbx_…`). Ils n'expirent pas : la révocation se fait en en recréant un avec
+  `npm run jeton`. Les jetons OAuth, eux, durent une heure et se renouvellent par rafraîchissement.
+- **Rafraîchissement concurrent.** Si un client présente deux fois le même jeton de rafraîchissement, toute la
+  lignée est révoquée, comme le veut le contrat : la personne doit alors reconnecter l'application.

@@ -49,7 +49,7 @@ export const horodatage = (iso) => h('time', { datetime: iso, title: new Date(is
 
 export function ligneActivite(a, opts) {
   return h('li.activite', avatar(a.actor),
-    h('p', h('strong', a.actor.name), ` ${phrase(a, opts)}${VIA[a.via] ?? ''} · `, horodatage(a.createdAt)));
+    h('p', h('strong', a.client ? `${a.client} pour ${a.actor.name}` : a.actor.name), ` ${phrase(a, opts)}${VIA[a.via] ?? ''} · `, horodatage(a.createdAt)));
 }
 
 /** Panneau « Activité » du tableau (fenêtre latérale). */
