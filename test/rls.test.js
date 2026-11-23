@@ -121,3 +121,52 @@ test('intégrité : un responsable doit être membre du tableau', async () => {
   const s = await scenario();
   await assert.rejects(admin.query('insert into card_assignees (card_id, user_id, board_id) values ($1, $2, $3)', [s.carte.id, s.intrus.id, s.board.id]));
 });
+
+test('la base garantit au moins un propriétaire : ni rétrogradation, ni retrait, ni réinvitation du dernier', async () => {
+  const s = await scenario();
+  await assert.rejects(commeUtilisateur(s.prop.id, (c) => c.query(
+    "update board_members set role = 'member' where board_id = $1 and user_id = $2", [s.board.id, s.prop.id])));
+  await assert.rejects(commeUtilisateur(s.prop.id, (c) => c.query(
+    'delete from board_members where board_id = $1 and user_id = $2', [s.board.id, s.prop.id])));
+  await assert.rejects(commeUtilisateur(s.prop.id, (c) => c.query(
+    'select kx_inviter($1, $2, $3, $4)', [s.board.id, s.prop.email, 'Prop', 'reader'])));
+  const { rows } = await admin.query("select count(*)::int n from board_members where board_id = $1 and role = 'owner'", [s.board.id]);
+  assert.equal(rows[0].n, 1);
+});
+
+test('réinviter un membre existant par la base est refusé et ne change pas son rôle', async () => {
+  const s = await scenario();
+  await assert.rejects(commeUtilisateur(s.prop.id, (c) => c.query(
+    'select kx_inviter($1, $2, $3, $4)', [s.board.id, s.membre.email.toUpperCase(), 'Membre', 'owner'])), { code: '23505' });
+  const { rows } = await admin.query('select role from board_members where board_id = $1 and user_id = $2', [s.board.id, s.membre.id]);
+  assert.equal(rows[0].role, 'member');
+});
+
+test('deux propriétaires qui se rétrogradent en même temps ne laissent pas le tableau sans propriétaire', async () => {
+  const s = await scenario();
+  const second = await creerUtilisateur('Second');
+  await admin.query("insert into board_members (board_id, user_id, role) values ($1, $2, 'owner')", [s.board.id, second.id]);
+  const c1 = await app.connect();
+  const c2 = await app.connect();
+  try {
+    for (const [c, u] of [[c1, s.prop], [c2, second]]) {
+      await c.query('begin');
+      await c.query("select set_config('app.user_id', $1, true)", [u.id]);
+    }
+    // Chacun rétrograde l'autre ; la première transaction n'est pas encore validée quand la seconde agit.
+    await c1.query("update board_members set role = 'member' where board_id = $1 and user_id = $2", [s.board.id, second.id]);
+    const p2 = c2.query("update board_members set role = 'member' where board_id = $1 and user_id = $2", [s.board.id, s.prop.id])
+      .then(() => 'accepté', (e) => e);
+    await new Promise((r) => setTimeout(r, 300));
+    await c1.query('commit');
+    const r2 = await p2;
+    assert.ok(r2 instanceof Error, 'la seconde rétrogradation doit être refusée');
+  } finally {
+    for (const c of [c1, c2]) {
+      await c.query('rollback').catch(() => {});
+      c.release();
+    }
+  }
+  const { rows } = await admin.query("select count(*)::int n from board_members where board_id = $1 and role = 'owner'", [s.board.id]);
+  assert.equal(rows[0].n, 1);
+});

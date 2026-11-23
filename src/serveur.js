@@ -56,8 +56,11 @@ function erreurVersReponse(e) {
   // Erreurs PostgreSQL connues : jamais de message interne renvoyé au client.
   switch (e.code) {
     case '42501': return new ErreurHttp(403, 'interdit', 'Droits insuffisants.');
+    case '23514':
+      if (e.constraint === 'un_proprietaire') return new ErreurHttp(400, 'requete_invalide', 'Un tableau doit toujours avoir au moins un propriétaire.');
+      return new ErreurHttp(400, 'requete_invalide', 'Valeur invalide.');
     case '23503': return new ErreurHttp(400, 'reference_invalide', 'Référence invalide (élément inexistant ou d\'un autre tableau).');
-    case '22P02': case '22023': case '23514': case '22001': case '22007': case '22008': return new ErreurHttp(400, 'requete_invalide', 'Valeur invalide.');
+    case '22P02': case '22023': case '22001': case '22007': case '22008': return new ErreurHttp(400, 'requete_invalide', 'Valeur invalide.');
     case '23505': return new ErreurHttp(409, 'conflit', 'Cet élément existe déjà.');
     default: console.error('Erreur interne :', e); return new ErreurHttp(500, 'erreur_interne', 'Erreur interne.');
   }

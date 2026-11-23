@@ -84,6 +84,18 @@ test('un tableau garde toujours un propriétaire', async () => {
   assert.equal((await prop.delete(`/api/boards/${b.id}/members/${prop.user.id}`)).status, 400);
 });
 
+test('réinviter un membre existant ne change pas son rôle (409), y compris soi-même', async () => {
+  const { prop, membre, b } = await equipe();
+  const soi = await prop.post(`/api/boards/${b.id}/members`, { email: prop.user.email, name: 'Prop', role: 'reader' });
+  assert.equal(soi.status, 409);
+  assert.equal(soi.data.erreur.code, 'deja_membre');
+  const autre = await prop.post(`/api/boards/${b.id}/members`, { email: membre.user.email.toUpperCase(), name: 'Membre', role: 'owner' });
+  assert.equal(autre.status, 409);
+  const roles = Object.fromEntries((await prop.get(`/api/boards/${b.id}/members`)).data.map((m) => [m.id, m.role]));
+  assert.equal(roles[prop.user.id], 'owner');
+  assert.equal(roles[membre.user.id], 'member');
+});
+
 test('retirer un membre lui ferme l\'accès', async () => {
   const { prop, membre, b } = await equipe();
   assert.equal((await prop.delete(`/api/boards/${b.id}/members/${membre.user.id}`)).status, 200);

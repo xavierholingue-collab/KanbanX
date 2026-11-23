@@ -1,7 +1,7 @@
 // Logique métier. Chaque fonction reçoit un contexte { user: {id, name, kind}, via, clientId } et s'exécute dans une
 // transaction « comme » l'utilisateur : le code vérifie les droits ET la base les applique (RLS).
 import { transaction } from './db.js';
-import { introuvable, interdit, invalide } from './erreurs.js';
+import { ErreurHttp, introuvable, interdit, invalide } from './erreurs.js';
 import { publier, expulser } from './evenements.js';
 import { rendreMarkdown, prenom } from './markdown.js';
 
@@ -123,7 +123,15 @@ export async function listerMembres(ctx, id) {
 export async function inviter(ctx, id, { email, name, role }) {
   return agir(ctx, async (c, emit) => {
     exigerProprietaire(await roleSur(c, id));
-    const { rows } = await c.query('select kx_inviter($1, $2, $3, $4) as id', [id, email, name, role]);
+    let rows;
+    try {
+      ({ rows } = await c.query('select kx_inviter($1, $2, $3, $4) as id', [id, email, name, role]));
+    } catch (e) {
+      if (e.code === '23505' && e.constraint === 'deja_membre') {
+        throw new ErreurHttp(409, 'deja_membre', 'Cette personne est déjà membre du tableau. Pour changer son rôle, utilisez la liste des membres.');
+      }
+      throw e;
+    }
     await journal(c, ctx, id, null, 'membre.invite', { userId: rows[0].id, role });
     emit(id, { kind: 'members', id });
     return (await lireTableau(c, id)).members;
