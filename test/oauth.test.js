@@ -4,7 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { demarrer, utilisateurConnecte, agentAvecJeton, Client } from './serveur.js';
-import { admin, fermer } from './aide.js';
+import { admin, fermer, commeUtilisateur, creerUtilisateur } from './aide.js';
 import { config } from '../src/config.js';
 import { reinitialiserLimites } from '../src/securite.js';
 
@@ -486,4 +486,18 @@ test('Applications connectées : un accès dont le rafraîchissement a expiré n
   await admin.query(`update oauth_jetons set expires_at = now() - interval '1 second'
     where acces_id in (select id from oauth_acces where user_id = $1)`, [eric.user.id]);
   assert.equal((await eric.get('/api/oauth/acces')).data.acces.length, 0);
+});
+
+test('base : seule une personne connectée peut créer un code ; le rôle applicatif ne lit pas les tables OAuth', async () => {
+  const client = (await enregistrer()).data.client_id;
+  const creer = (uid) => commeUtilisateur(uid, (c) => c.query("select kx_oauth_code_creer($1, $2, $3, $4, 'kanbanx', $5, '60 seconds')",
+    [randomBytes(32), client, RETOUR_CLAUDE, pkce().defi, RESSOURCE]));
+  const agent = await creerUtilisateur('Claude', 'agent');
+  await assert.rejects(creer(agent.id), (e) => e.code === '42501');
+  await assert.rejects(creer(null), (e) => e.code === '42501');
+  const eric = await creerUtilisateur('Eric');
+  await creer(eric.id);
+  for (const table of ['oauth_clients', 'oauth_acces', 'oauth_codes', 'oauth_jetons']) {
+    await assert.rejects(commeUtilisateur(eric.id, (c) => c.query(`select * from ${table}`)), (e) => e.code === '42501', table);
+  }
 });
