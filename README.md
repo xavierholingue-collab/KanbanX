@@ -6,6 +6,8 @@ participe comme un membre à part entière.
 - Ce qu'on construit : [docs/cahier-des-charges.md](docs/cahier-des-charges.md)
 - Règles pour les agents : [CLAUDE.md](CLAUDE.md)
 - Bilan de la première nuit : [RAPPORT-NUIT-1.md](RAPPORT-NUIT-1.md)
+- Durcissement avant mise en production : [RAPPORT-NUIT-2.md](RAPPORT-NUIT-2.md)
+- Mise en production (https://kanbanx.y-factor.fr) : [docs/mise-en-production.md](docs/mise-en-production.md)
 
 ## Démarrer en local
 
@@ -24,8 +26,14 @@ Le jeton d'API de Claude s'affiche une seule fois dans la console.
 
 **Se connecter** : saisir une adresse sur `/connexion`. En développement, le
 lien magique s'affiche dans la console du serveur au lieu d'être envoyé.
-En production, définir `SMTP_URL` (`smtp://` ou `smtps://utilisateur:motdepasse@hôte:port`)
-et `SMTP_FROM`.
+
+Le serveur écoute sur `127.0.0.1` (variable `HOST` pour changer). En développement, il applique
+les migrations et crée les données de démonstration au démarrage. En production, il ne fait ni l'un
+ni l'autre, et refuse de démarrer si sa configuration est dangereuse : voir
+[docs/mise-en-production.md](docs/mise-en-production.md).
+
+Créer un compte sans passer par une invitation (par exemple le premier propriétaire) :
+`npm run compte -- <courriel> <prénom> [agent]`.
 
 ## Tests
 
