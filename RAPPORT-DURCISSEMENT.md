@@ -63,3 +63,9 @@ les migrations sur le serveur dans ces conditions.
 2. **Le développement reste simple** : `npm start` applique toujours les migrations et les données de
    démonstration, mais uniquement hors production.
 3. **Port SMTP par défaut** : 587 (soumission avec STARTTLS) au lieu de 25.
+4. **Santé : délai de 3 secondes** pour interroger la base. Au-delà, la route répond 503 au lieu de faire
+   attendre la sonde.
+5. **Santé : un `commit` vérifié.** Le contenu de `.commit-deploye` n'est repris que s'il ressemble à une
+   empreinte git (7 à 40 caractères hexadécimaux) ; sinon la route renvoie `dev`.
+6. **Direct : réouverture par l'application** si le navigateur renonce à se reconnecter (réponse inattendue
+   pendant un redémarrage), toutes les 3 secondes, tant que le même tableau est affiché.
