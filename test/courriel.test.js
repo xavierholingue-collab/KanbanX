@@ -74,3 +74,26 @@ test('aucune injection d\'en-tête par l\'adresse du destinataire', async () => 
     await assert.rejects(envoyerLien('a@b.fr\r\nBcc: victime@exemple.invalid', 'x'), /En-tête invalide/);
   } finally { config.smtpUrl = avant; }
 });
+
+test('le message est conforme (RFC 5322) : Date, Message-ID, MIME, encodage, EHLO avec l\'hôte public', async () => {
+  const { s, recu, port } = await fauxSmtp();
+  const [avantUrl, avantDe] = [config.smtpUrl, config.smtpFrom];
+  config.smtpUrl = `smtp://127.0.0.1:${port}?tls=non`;
+  config.smtpFrom = 'KanbanX <kanbanx@exemple.invalid>';
+  try {
+    await envoyerLien('xavier@exemple.invalid', 'http://localhost:3000/connexion/verifier?token=abc');
+  } finally { config.smtpUrl = avantUrl; config.smtpFrom = avantDe; s.close(); }
+  assert.equal(recu.commandes[0], `EHLO ${new URL(config.baseUrl).hostname}`);
+  assert.match(recu.data, /^Date: (Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} \+0000$/m);
+  assert.match(recu.data, /^Message-ID: <[A-Za-z0-9.-]+@exemple\.invalid>$/m);
+  assert.match(recu.data, /^MIME-Version: 1\.0$/m);
+  assert.match(recu.data, /^Content-Type: text\/plain; charset=utf-8$/m);
+  assert.match(recu.data, /^Content-Transfer-Encoding: 8bit$/m);
+  assert.match(recu.data, /^From: KanbanX <kanbanx@exemple\.invalid>$/m);
+});
+
+test('un sujet accentué est encodé selon la RFC 2047, un sujet ASCII reste tel quel', async () => {
+  const { encoderSujet } = await import('../src/courriel.js');
+  assert.equal(encoderSujet('Votre lien de connexion KanbanX'), 'Votre lien de connexion KanbanX');
+  assert.equal(encoderSujet('Connexion à KanbanX'), `=?UTF-8?B?${Buffer.from('Connexion à KanbanX').toString('base64')}?=`);
+});
