@@ -13,7 +13,9 @@ export async function demanderLien(email, ip) {
   const jeton = jetonAleatoire();
   const { rows } = await pool.query('select kx_lien_demander($1, $2, $3::interval) as id', [email, hacher(jeton), `${config.lienTtlMs / 1000} seconds`]);
   if (rows[0].id) {
-    await envoyerLien(email.toLowerCase(), `${config.baseUrl}/connexion/verifier?token=${jeton}`);
+    // Envoi en arrière-plan : la réponse part aussi vite que le compte existe ou non (pas d'énumération par le temps).
+    envoyerLien(email.toLowerCase(), `${config.baseUrl}/connexion/verifier?token=${jeton}`)
+      .catch((e) => console.error('Envoi du lien de connexion impossible :', e.message));
   }
 }
 

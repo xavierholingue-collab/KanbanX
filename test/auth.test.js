@@ -100,8 +100,12 @@ test('sans authentification : 401 ; jeton Bearer invalide : 401', async () => {
 
 test('un jeton d\'API fonctionne sans CSRF ; révoqué, il cesse de fonctionner', async () => {
   const a = await agentAvecJeton(srv.base);
+  // Un agent ne peut pas posséder de tableau : il écrit dans le tableau d'une personne qui l'a invité.
+  const prop = await utilisateurConnecte(srv.base);
+  const b = (await prop.post('/api/boards', { name: 'Équipe' })).data;
+  await prop.post(`/api/boards/${b.id}/members`, { email: a.user.email, name: 'Claude', role: 'member' });
   assert.equal((await a.get('/api/boards')).status, 200);
-  assert.equal((await a.post('/api/boards', { name: 'Tableau de Claude' })).status, 200);
+  assert.equal((await a.post(`/api/columns/${b.columns[0].id}/cards`, { title: 'Carte de Claude' })).status, 200);
   await admin.query('update api_tokens set revoked_at = now() where user_id = $1', [a.user.id]);
   assert.equal((await a.get('/api/boards')).status, 401);
 });

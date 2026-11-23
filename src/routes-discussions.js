@@ -1,10 +1,10 @@
 // Routes P2 : commentaires, activité, flux en direct.
 import * as D from './services-discussions.js';
 import { agir, roleSur } from './services.js';
-import { abonner } from './evenements.js';
+import { abonner, nbFluxUtilisateur, MAX_FLUX_PAR_UTILISATEUR } from './evenements.js';
 import { FLUX } from './routes.js';
 import { estUuid } from './validation.js';
-import { invalide } from './erreurs.js';
+import { invalide, ErreurHttp } from './erreurs.js';
 
 export const routesDiscussions = [];
 function r(methode, chemin, def, handler) { routesDiscussions.push({ methode, chemin, ...def, handler }); }
@@ -35,6 +35,9 @@ r('GET', '/api/comments/recent', { tag: 'Discussions', resume: 'Commentaires ré
 r('GET', '/api/boards/:id/events', { tag: 'Direct', resume: 'Flux Server-Sent Events des changements du tableau (événement « maj » : {kind, id, cardId, par}).' },
 async ({ ctx, params, req, res }) => {
   await agir(ctx, (c) => roleSur(c, params.id));
+  if (nbFluxUtilisateur(ctx.user.id) >= MAX_FLUX_PAR_UTILISATEUR) {
+    throw new ErreurHttp(429, 'trop_de_flux', 'Trop de flux en direct ouverts. Fermez des onglets et réessayez.', { reessayerDansS: 30 });
+  }
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 3000\n: connecté\n\n');
   const desabonner = abonner(params.id, res, ctx.user.id);

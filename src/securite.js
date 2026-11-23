@@ -44,3 +44,16 @@ export function lireCookie(req, nom) {
   }
   return null;
 }
+
+/**
+ * Adresse du client. Derrière un proxy inverse de confiance (TRUST_PROXY=1), la connexion vient de la boucle
+ * locale et le proxy transmet la vraie adresse dans X-Real-IP. Une connexion directe depuis Internet ne peut
+ * jamais imposer son adresse par cet en-tête.
+ */
+export function ipClient(req, faireConfianceAuProxy) {
+  const directe = req.socket?.remoteAddress ?? '?';
+  if (!faireConfianceAuProxy) return directe;
+  const locale = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(directe);
+  const reelle = String(req.headers?.['x-real-ip'] ?? '').trim();
+  return locale && /^[0-9a-fA-F:.]{2,45}$/.test(reelle) ? reelle : directe;
+}
