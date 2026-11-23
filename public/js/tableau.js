@@ -66,18 +66,38 @@ export async function recharger() {
 
 function brancherDirect() {
   if (!window.EventSource) return;
-  const s = new EventSource(`/api/boards/${T.tableau.id}/events`);
-  T.source = s;
+  const tableauId = T.tableau.id;
   let minuteur = null;
-  s.addEventListener('maj', (e) => {
-    let d; try { d = JSON.parse(e.data); } catch { return; }
-    if (d.client === clientId) return; // nos propres actions sont déjà affichées
-    if (d.retire === T.moi.id) { s.close(); erreur('Vous avez été retiré de ce tableau.'); return naviguer('/'); }
-    clearTimeout(minuteur);
-    minuteur = setTimeout(recharger, 150);
-    window.dispatchEvent(new CustomEvent('kx:evenement', { detail: d }));
-  });
-  s.addEventListener('error', () => { /* le navigateur se reconnecte seul */ });
+  let coupe = false;
+  const ouvrir = () => {
+    const s = new EventSource(`/api/boards/${tableauId}/events`);
+    T.source = s;
+    // Après une coupure (une livraison redémarre le serveur), les événements émis entre-temps ne sont pas
+    // rejoués : à la reconnexion, on recharge le tableau et la carte ouverte.
+    s.addEventListener('open', () => {
+      if (!coupe) return;
+      coupe = false;
+      recharger();
+      window.dispatchEvent(new CustomEvent('kx:resynchroniser'));
+    });
+    s.addEventListener('maj', (e) => {
+      let d; try { d = JSON.parse(e.data); } catch { return; }
+      if (d.client === clientId) return; // nos propres actions sont déjà affichées
+      if (d.retire === T.moi.id) { s.close(); erreur('Vous avez été retiré de ce tableau.'); return naviguer('/'); }
+      clearTimeout(minuteur);
+      minuteur = setTimeout(recharger, 150);
+      window.dispatchEvent(new CustomEvent('kx:evenement', { detail: d }));
+    });
+    s.addEventListener('error', () => {
+      coupe = true;
+      // Le navigateur se reconnecte seul, sauf s'il a abandonné (réponse inattendue pendant le redémarrage) :
+      // on rouvre alors nous-mêmes, tant que l'on regarde toujours ce tableau.
+      if (s.readyState === EventSource.CLOSED) {
+        setTimeout(() => { if (T.source === s && T.tableau?.id === tableauId) ouvrir(); }, 3000);
+      }
+    });
+  };
+  ouvrir();
 }
 
 /** Exécute une modification optimiste : `modifier` change l'état local, `appel` l'envoie au serveur. */

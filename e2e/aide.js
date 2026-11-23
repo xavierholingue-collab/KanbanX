@@ -6,13 +6,17 @@ import { reinitialiserLimites } from '../src/securite.js';
 import { admin, app, creerUtilisateur } from '../test/aide.js';
 
 export async function environnement() {
-  const srv = creerServeur();
+  let srv = creerServeur();
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
-  const base = `http://localhost:${srv.address().port}`;
+  const port = srv.address().port;
+  const base = `http://localhost:${port}`;
   const navigateur = await chromium.launch();
+  const arreter = async () => { srv.closeAllConnections(); await new Promise((r) => srv.close(r)); };
   return {
     base, navigateur,
-    async fermer() { await navigateur.close(); srv.closeAllConnections(); await new Promise((r) => srv.close(r)); await admin.end(); await app.end(); },
+    /** Simule une livraison : le serveur s'arrête (flux en direct coupés) puis redémarre sur le même port. */
+    async relancer() { await arreter(); srv = creerServeur(); await new Promise((r) => srv.listen(port, '127.0.0.1', r)); },
+    async fermer() { await navigateur.close(); await arreter(); await admin.end(); await app.end(); },
   };
 }
 

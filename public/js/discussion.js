@@ -13,6 +13,11 @@ window.addEventListener('kx:evenement', (e) => {
   if (ev.cardId === D.carteId || (ev.kind === 'card' && ev.id === D.carteId)) recharger(true);
 });
 
+// Reconnexion du direct après une coupure : les commentaires arrivés entre-temps n'ont pas été annoncés.
+window.addEventListener('kx:resynchroniser', () => {
+  if (D.carteId && D.conteneur?.isConnected) recharger(true);
+});
+
 async function recharger(direct = false) {
   const id = D.carteId;
   const [c, a] = await Promise.all([get(`/api/cards/${id}/comments`), get(`/api/cards/${id}/activity`)]).catch(() => [null, null]);
