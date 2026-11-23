@@ -1,0 +1,29 @@
+# Mises à jour proposées par Dependabot — tenu par InfraLWS (23/11/2026).
+#
+# « cooldown » : une version publiée depuis moins de 7 jours n'est pas
+# proposée. Une version piégée est en général découverte et retirée du
+# registre bien avant ce délai.
+# Une proposition n'est qu'une demande de fusion : elle passe les contrôles
+# de livraison.yml, et rien n'est mis en ligne tant qu'elle n'est pas fusionnée.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dependances:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+
+  # Les actions sont épinglées par empreinte : Dependabot tient l'empreinte
+  # et le commentaire de version à jour ensemble.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
