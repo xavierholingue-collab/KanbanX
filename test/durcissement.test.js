@@ -6,6 +6,9 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as attendre } from 'node:timers/promises';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { demarrer, Client, utilisateurConnecte, agentAvecJeton } from './serveur.js';
@@ -121,18 +124,30 @@ test('une adresse mal encodée renvoie 400, pas 500', async () => {
   assert.equal((await fetch(`${srv.base}/%E0%A4%A`)).status, 400);
 });
 
+// gc() sans option de lancement : le test se suffit à lui-même, quel que soit le lanceur (npm test, CI).
+v8.setFlagsFromString('--expose-gc');
+const ramasserLesMiettes = vm.runInNewContext('gc');
+
 test('le nombre de flux en direct par utilisateur est limité', async () => {
   const c = await utilisateurConnecte(srv.base);
   const b = (await c.post('/api/boards', { name: 'Flux' })).data;
   const abandons = [];
+  // Les réponses restent référencées jusqu'à la fin du test : une réponse oubliée est fermée par undici dès
+  // le passage du ramasse-miettes, et le serveur libère sa place (échec au hasard en CI).
+  const reponses = [];
   try {
     for (let i = 0; i < MAX_FLUX_PAR_UTILISATEUR; i++) {
       const a = new AbortController(); abandons.push(a);
       const r = await fetch(`${srv.base}/api/boards/${b.id}/events`, { headers: { Cookie: c.cookie }, signal: a.signal });
       assert.equal(r.status, 200);
+      reponses.push(r);
     }
+    // Le ramasse-miettes ne doit fermer aucun des dix flux : on le force, puis on laisse le serveur constater.
+    for (let i = 0; i < 3; i++) { ramasserLesMiettes(); await attendre(50); }
     const r = await fetch(`${srv.base}/api/boards/${b.id}/events`, { headers: { Cookie: c.cookie } });
     assert.equal(r.status, 429);
+    await r.body?.cancel();
+    assert.equal(reponses.length, MAX_FLUX_PAR_UTILISATEUR);
   } finally {
     for (const a of abandons) a.abort();
   }
