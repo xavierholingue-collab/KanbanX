@@ -258,3 +258,12 @@ test('un lecteur ne voit aucune commande d\'écriture', async () => {
   assert.equal(await l.getByRole('button', { name: 'Ajouter une colonne' }).count(), 0);
   await p.context().close(); await l.context().close();
 });
+
+test('écran de connexion : l\'en-tête ne montre que la marque, sans texte parasite', async () => {
+  const ctx = await env.navigateur.newContext({ viewport: { width: 1366, height: 820 }, locale: 'fr-FR' });
+  const page = await ctx.newPage();
+  await page.goto(`${env.base}/`);
+  await page.getByRole('heading', { name: 'Connexion à KanbanX' }).waitFor();
+  assert.equal((await page.locator('#entete').innerText()).trim(), 'KanbanX');
+  await ctx.close();
+});
