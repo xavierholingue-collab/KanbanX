@@ -7,10 +7,11 @@ participe comme un membre à part entière.
 - Règles pour les agents : [CLAUDE.md](CLAUDE.md)
 - Bilan de la première nuit : [RAPPORT-NUIT-1.md](RAPPORT-NUIT-1.md)
 - Durcissement avant mise en production : [RAPPORT-DURCISSEMENT.md](RAPPORT-DURCISSEMENT.md)
+- Ce que la production exige (variables, commandes, route de santé) : [docs/mise-en-production.md](docs/mise-en-production.md)
 
 ## Démarrer en local
 
-Prérequis : Node.js 26, Docker.
+Prérequis : Node.js 22 ou plus récent, Docker.
 
 ```bash
 cp .env.exemple .env     # valeurs de développement, fictives
