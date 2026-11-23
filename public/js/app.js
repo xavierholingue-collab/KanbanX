@@ -43,14 +43,15 @@ window.addEventListener('kx:deconnecte', () => { etat.moi = null; naviguer('/con
 
 function entete() {
   const el = document.getElementById('entete');
-  el.replaceChildren(
+  // replaceChildren écrirait « null » pour chaque élément absent : on ne garde que les éléments présents.
+  el.replaceChildren(...[
     h('a.marque', { href: etat.moi ? '/' : '/connexion' }, logo(), 'KanbanX'),
     h('span.espace'),
     etat.moi && h('span.utilisateur', etat.moi.name),
     etat.moi && h('a.btn.btn-icone', { href: '/applications', 'aria-label': 'Applications connectées', title: 'Applications connectées' }, icone('robot')),
     etat.moi && h('button.btn.btn-icone', { type: 'button', 'aria-label': 'Raccourcis clavier (?)', title: 'Raccourcis clavier (?)', onclick: () => window.dispatchEvent(new CustomEvent('kx:aide')) }, icone('aide')),
     etat.moi && h('button.btn', { type: 'button', onclick: deconnexion }, icone('sortie'), h('span.texte-entete', 'Se déconnecter')),
-  );
+  ].filter(Boolean));
 }
 function logo() {
   const img = h('img.marque-logo', { src: '/favicon.svg', alt: '' });
