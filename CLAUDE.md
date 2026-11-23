@@ -28,6 +28,20 @@ Lis ce fichier en entier avant toute action, puis `docs/cahier-des-charges.md`.
   signale-le en tête du rapport.
 - Ne crée ni ne modifie de fichier dans `.github/`.
 
+## Migrations de la base
+
+- La version précédente du code doit continuer à tourner sur le nouveau
+  schéma. Le retour arrière consiste alors à relancer le code précédent, en
+  quelques secondes, sans restaurer la base : une restauration ferait perdre
+  tout ce qui a été écrit depuis la sauvegarde.
+- Une migration ne fait donc qu'ajouter : tables, colonnes facultatives ou avec
+  une valeur par défaut, index, fonctions, droits. On ne renomme ni ne supprime
+  rien dans la même livraison, et on n'ajoute aucune contrainte que l'ancien
+  code ne respecterait pas.
+- Pour renommer ou supprimer : une première livraison où le code cesse
+  d'utiliser l'ancien élément, puis une livraison suivante qui le retire.
+- Une migration déjà livrée ne se modifie jamais : on en écrit une nouvelle.
+
 ## Fin de travail
 
 - `npm test` doit être vert. Un test qui échoue pour une raison que tu ne sais

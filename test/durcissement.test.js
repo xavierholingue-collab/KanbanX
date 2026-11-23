@@ -217,7 +217,7 @@ test('adresse du client : X-Real-IP n\'est cru que derrière un proxy de confian
 
 // ---------- Premier compte en production ----------
 
-test('création d\'un compte en ligne de commande : personne ou agent, sans doublon, adresse valide', async () => {
+test('création d\'un compte en ligne de commande : personne ou agent, idempotente, adresse valide', async () => {
   const { creerCompte } = await import('../scripts/compte.js');
   const cl = await admin.connect();
   try {
@@ -225,7 +225,10 @@ test('création d\'un compte en ligne de commande : personne ou agent, sans doub
     const u = await creerCompte(cl, email, 'Xavier');
     assert.equal(u.email, email.toLowerCase());
     assert.equal(u.kind, 'human');
-    await assert.rejects(creerCompte(cl, email, 'Xavier'), /existe déjà/);
+    const encore = await creerCompte(cl, email, 'Xavier');
+    assert.equal(encore.id, u.id);
+    assert.equal(encore.existait, true);
+    await assert.rejects(creerCompte(cl, email, 'Xavier', 'agent'), /autre type/);
     await assert.rejects(creerCompte(cl, 'pas-une-adresse', 'X'), /adresse/i);
     await assert.rejects(creerCompte(cl, `x-${Date.now()}@exemple.invalid`, ''), /prénom/i);
     const agent = await creerCompte(cl, `claude-${Date.now()}@exemple.invalid`, 'Claude', 'agent');

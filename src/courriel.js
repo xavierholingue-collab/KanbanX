@@ -1,6 +1,7 @@
 // Envoi du lien magique. En développement : affiché dans la console. Sinon : SMTP minimal (SMTP_URL).
 import net from 'node:net';
 import tls from 'node:tls';
+import { randomBytes } from 'node:crypto';
 import { config } from './config.js';
 
 export const boiteDev = []; // utile aux tests : derniers messages « envoyés »
@@ -16,6 +17,27 @@ export async function envoyerLien(email, lien) {
   await smtp(message);
 }
 
+/** Sujet d'en-tête (RFC 2047) : tel quel s'il est en ASCII imprimable, sinon encodé en base64 UTF-8. */
+export function encoderSujet(sujet) {
+  if (/^[\x20-\x7e]*$/.test(sujet)) return sujet;
+  return `=?UTF-8?B?${Buffer.from(sujet, 'utf8').toString('base64')}?=`;
+}
+
+/** En-têtes d'un message conforme (RFC 5322) : Date et Message-ID au domaine de l'expéditeur. */
+function enTetes({ de, a, sujet }) {
+  const domaine = de.split('@').pop();
+  return [
+    `From: ${config.smtpFrom}`,
+    `To: ${a}`,
+    `Subject: ${encoderSujet(sujet)}`,
+    `Date: ${new Date().toUTCString().replace('GMT', '+0000')}`,
+    `Message-ID: <${Date.now().toString(36)}.${randomBytes(12).toString('hex')}@${domaine}>`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: 8bit',
+  ].join('\r\n');
+}
+
 // TLS obligatoire : smtps:// (TLS dès la connexion) ou smtp:// avec STARTTLS exigé. Sans TLS, les identifiants
 // SMTP et le lien de connexion circuleraient en clair : on refuse d'envoyer. Seule exception, hors production
 // et explicite : ?tls=non, pour un faux serveur local de test.
@@ -26,7 +48,9 @@ function smtp({ a, sujet, texte }) {
   if (sansTls && config.env === 'production') throw new Error('SMTP : TLS obligatoire en production (?tls=non refusé).');
   const port = Number(u.port || (implicite ? 465 : 587));
   const de = (config.smtpFrom.match(/<([^>]+)>/) || [, config.smtpFrom])[1];
-  if (/[\r\n]/.test(a + sujet)) throw new Error('En-tête invalide');
+  if (/[\r\n]/.test(a + sujet + config.smtpFrom)) throw new Error('En-tête invalide');
+  // EHLO annonce l'hôte public (BASE_URL), comme le veulent les filtres anti-indésirables.
+  const ehlo = `EHLO ${new URL(config.baseUrl).hostname}`;
   return new Promise((resolve, reject) => {
     let sock = implicite ? tls.connect({ host: u.hostname, port, servername: u.hostname }) : net.connect({ host: u.hostname, port });
     let tampon = '';
@@ -46,14 +70,14 @@ function smtp({ a, sujet, texte }) {
     const cmd = async (l, ok) => { sock.write(`${l}\r\n`); const r = await lire(); if (!ok.includes(r.code)) throw new Error(`SMTP ${r.code}`); return r; };
     (async () => {
       let r = await lire(); if (r.code !== 220) throw new Error(`SMTP ${r.code}`);
-      r = await cmd('EHLO kanbanx', [250]);
+      r = await cmd(ehlo, [250]);
       if (!implicite) {
         if (/STARTTLS/i.test(r.t)) {
           await cmd('STARTTLS', [220]);
           sock.removeAllListeners('data'); sock.removeAllListeners('close');
           sock = tls.connect({ socket: sock, host: u.hostname, servername: u.hostname }); brancher(sock);
           await new Promise((res) => sock.once('secureConnect', res));
-          await cmd('EHLO kanbanx', [250]);
+          await cmd(ehlo, [250]);
         } else if (!sansTls) {
           throw new Error('SMTP : le serveur ne propose pas STARTTLS ; envoi refusé (TLS obligatoire).');
         }
@@ -66,7 +90,7 @@ function smtp({ a, sujet, texte }) {
       await cmd(`RCPT TO:<${a}>`, [250, 251]);
       await cmd('DATA', [354]);
       const corps = texte.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..');
-      await cmd(`From: ${config.smtpFrom}\r\nTo: ${a}\r\nSubject: ${sujet}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${corps}\r\n.`, [250]);
+      await cmd(`${enTetes({ de, a, sujet })}\r\n\r\n${corps}\r\n.`, [250]);
       await cmd('QUIT', [221]);
     })().then(() => { clearTimeout(timer); sock.end(); resolve(); }, (e) => { clearTimeout(timer); sock.destroy(); reject(e); });
   });

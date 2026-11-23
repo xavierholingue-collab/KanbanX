@@ -7,7 +7,7 @@ export const config = {
   port: Number(e.PORT ?? 3000),
   // Par défaut, écoute locale uniquement (derrière un proxy inverse en production).
   host: e.HOST || '127.0.0.1',
-  // Derrière un proxy inverse qui pose X-Real-IP (nginx) : TRUST_PROXY=1, pour limiter le débit par vraie adresse.
+  // Derrière un proxy inverse qui pose X-Real-IP : TRUST_PROXY=1, pour limiter le débit par vraie adresse.
   trustProxy: e.TRUST_PROXY === '1',
   baseUrl: (e.BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
   databaseUrl: e.DATABASE_URL || 'postgres://kanbanx_app:kanbanx_app_dev@127.0.0.1:5432/kanbanx',

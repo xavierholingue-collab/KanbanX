@@ -11,6 +11,7 @@ import { routesDiscussions } from './routes-discussions.js';
 import { genererOpenApi } from './openapi.js';
 import { traiterMcp } from './mcp.js';
 import { config } from './config.js';
+import { etatSante } from './sante.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -76,6 +77,13 @@ function erreurVersReponse(e) {
 
 async function api(req, res, url) {
   const ip = ipClient(req, config.trustProxy);
+  if (url.pathname === '/api/sante') {
+    if (req.method !== 'GET' && req.method !== 'HEAD') throw new ErreurHttp(405, 'methode', 'Méthode non autorisée.');
+    const l = limiter(`api-pub:${ip}`, 120, 60_000);
+    if (!l.ok) throw new ErreurHttp(429, 'trop_de_requetes', 'Trop de requêtes.', { reessayerDansS: l.reessayerDansS });
+    const { status, corps } = await etatSante();
+    return envoyerJson(res, status, corps);
+  }
   if (url.pathname === '/api/openapi.json') return envoyerJson(res, 200, genererOpenApi(tableau));
   if (url.pathname === '/api/docs') return statique(req, res, new URL('/docs-api.html', 'http://x'));
   const trouve = tableau.find((r) => r.methode === req.method && r.re.test(url.pathname));
