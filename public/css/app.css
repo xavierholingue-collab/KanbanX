@@ -261,6 +261,9 @@ kbd { font-family: var(--police-mono); font-size: var(--t-s); padding: 0.1em 0.4
 @media (max-width: 40rem) {
   .entete { padding: var(--e-2) var(--e-3); }
   .utilisateur { display: none; }
+  /* Sur téléphone, les boutons de l'en-tête n'affichent que leur icône ; le texte reste lu par les lecteurs d'écran. */
+  .entete .texte-entete { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .entete .btn { min-width: var(--cible); justify-content: center; }
   .barre-tableau { padding: var(--e-2) var(--e-3); }
   .filtres { margin-left: 0; width: 100%; }
   .filtres .recherche { flex: 1 1 100%; }
@@ -326,3 +329,24 @@ kbd { font-family: var(--police-mono); font-size: var(--t-s); padding: 0.1em 0.4
 .import { margin-top: var(--e-5); }
 .import .aide { margin: 0; }
 input[type="file"]:focus-visible + label { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+
+/* ---------- Applications connectées (OAuth) ---------- */
+/* Titres qui reçoivent le focus à l'ouverture d'un écran : ils ne sont pas interactifs, pas de cadre. */
+h1[tabindex="-1"]:focus { outline: none; }
+.boite-large { max-width: 34rem; }
+.boite-large > * + * { margin-top: var(--e-3); }
+.liste-droits { margin: 0; padding-left: var(--e-5); display: grid; gap: var(--e-1); }
+.message-attention { background: var(--c-accent-pale); color: var(--c-sur-accent-pale); }
+.retour-hote strong { overflow-wrap: anywhere; }
+.actions-consentement { margin-top: var(--e-4); }
+.actions-consentement .btn { min-height: 44px; }
+.page-etroite { max-width: 44rem; }
+.page-etroite > * + * { margin-top: var(--e-3); }
+.page-etroite h2 { font-size: var(--t-l); margin-top: var(--e-5); }
+.liste-applications { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-2); }
+.application {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e-3);
+  padding: var(--e-3) var(--e-4); background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-m);
+}
+.application-texte p { margin: 0; }
+.adresse-mcp { display: inline-block; padding: var(--e-1) var(--e-2); background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-s, 4px); user-select: all; overflow-wrap: anywhere; }

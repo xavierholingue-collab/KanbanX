@@ -175,6 +175,9 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select a.id, c.name, a.redirect_uri, a.created_at, a.last_used_at
   from oauth_acces a join oauth_clients c on c.id = a.client_id
   where a.user_id = kx_uid() and a.revoked_at is null
+    -- Seulement les accès encore vivants : un jeton de rafraîchissement non utilisé et non expiré.
+    and exists (select 1 from oauth_jetons j where j.acces_id = a.id and j.type = 'rafraichissement'
+                and j.used_at is null and j.expires_at > now())
   order by a.created_at desc
 $$;
 

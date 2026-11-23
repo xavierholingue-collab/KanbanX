@@ -401,6 +401,11 @@ test('ressource différente refusée ; le jeton ne vaut que pour /mcp', async ()
   const api = new Client(srv.base);
   api.bearer = j.access_token;
   assert.equal((await api.get('/api/boards')).status, 401);
+  // Audience : un jeton émis pour une autre ressource est refusé par /mcp.
+  const k = await brancher(eric);
+  assert.equal((await mcp(k.access_token, 'ping')).status, 200);
+  await admin.query("update oauth_acces set resource = 'https://autre.example/mcp' where id = (select acces_id from oauth_jetons where token_hash = sha256(convert_to($1, 'UTF8')))", [k.access_token]);
+  assert.equal((await mcp(k.access_token, 'ping')).status, 401);
   // Un jeton passé dans l'adresse n'est jamais lu.
   const q = await fetch(`${srv.base}/mcp?access_token=${j.access_token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) });
@@ -472,4 +477,13 @@ test('jeton : requête mal formée, type d\'accord inconnu, corps JSON refusé',
   assert.equal(enJson.status, 400);
   assert.equal(enJson.data.error, 'invalid_request');
   assert.equal((await rafraichir('kxr_inexistant_inexistant_inexistant', 'kxc_inconnu')).data.error, 'invalid_grant');
+});
+
+test('Applications connectées : un accès dont le rafraîchissement a expiré n\'est plus listé', async () => {
+  const eric = await utilisateurConnecte(srv.base, 'Eric');
+  await brancher(eric);
+  assert.equal((await eric.get('/api/oauth/acces')).data.acces.length, 1);
+  await admin.query(`update oauth_jetons set expires_at = now() - interval '1 second'
+    where acces_id in (select id from oauth_acces where user_id = $1)`, [eric.user.id]);
+  assert.equal((await eric.get('/api/oauth/acces')).data.acces.length, 0);
 });
