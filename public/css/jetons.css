@@ -1,0 +1,108 @@
+/* KanbanX — jetons de design : la seule source des couleurs, espacements et typographie de l'interface.
+   Dominante bleue, touches d'orange. Contrastes vérifiés par test/contrastes.test.js (WCAG 2.2 AA). */
+:root {
+  /* Couleurs — mode clair */
+  --c-fond: #e8eef6;            /* fond de l'application / du tableau */
+  --c-surface: #ffffff;         /* cartes, fenêtres */
+  --c-colonne: #f3f6fa;         /* fond des colonnes */
+  --c-bordure: #c9d3e0;
+  --c-bordure-forte: #7d8ca1;   /* contours de champs (3:1) */
+  --c-texte: #172b4d;
+  --c-texte-doux: #44546f;
+  --c-primaire: #0b5cad;        /* boutons principaux, liens */
+  --c-primaire-survol: #094b8f;
+  --c-sur-primaire: #ffffff;
+  --c-primaire-pale: #dceafb;
+  --c-entete: #0a3d73;          /* barre supérieure */
+  --c-sur-entete: #ffffff;
+  --c-accent: #c25100;          /* orange : touches, mentions, échéances proches */
+  --c-accent-pale: #ffe4cf;
+  --c-sur-accent-pale: #6b2c00;
+  --c-danger: #b42318;
+  --c-danger-pale: #fde3e1;
+  --c-sur-danger-pale: #7a1610;
+  --c-succes: #1f6f3a;
+  --c-focus: #c25100;
+  --c-focus-sur-fonce: #ffb27a;
+  --c-fantome: #cfdced;
+  --c-voile: rgb(9 30 66 / 0.55);
+  --c-survol-sur-fonce: rgb(255 255 255 / 0.16);
+  --c-ajout-colonne: rgb(255 255 255 / 0.5);
+  --c-ombre: rgb(9 30 66 / 0.18);
+
+  /* Étiquettes : texte blanc sur fond coloré (≥ 4,5:1) */
+  --c-etiq-bleu: #1d63c4;
+  --c-etiq-turquoise: #0b7285;
+  --c-etiq-vert: #2b7a3b;
+  --c-etiq-orange: #b54708;
+  --c-etiq-rouge: #c4291c;
+  --c-etiq-violet: #6e46c0;
+  --c-etiq-ardoise: #4b5868;
+  --c-etiq-brun: #7a4b2a;
+  --c-sur-etiq: #ffffff;
+
+  /* Typographie */
+  --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --police-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --t-xs: 0.75rem;
+  --t-s: 0.875rem;
+  --t-m: 1rem;
+  --t-l: 1.25rem;
+  --t-xl: 1.5rem;
+  --interligne: 1.45;
+  --graisse-forte: 650;
+
+  /* Espacements */
+  --e-1: 0.25rem;
+  --e-2: 0.5rem;
+  --e-3: 0.75rem;
+  --e-4: 1rem;
+  --e-5: 1.5rem;
+  --e-6: 2rem;
+
+  /* Formes */
+  --rayon-s: 4px;
+  --rayon-m: 8px;
+  --rayon-l: 12px;
+  --ombre-carte: 0 1px 1px var(--c-ombre), 0 0 1px var(--c-ombre);
+  --ombre-haute: 0 8px 24px var(--c-ombre);
+  --largeur-colonne: 17rem;
+  --cible: 2rem;           /* taille minimale d'une zone cliquable (souris) */
+  --cible-tactile: 2.75rem; /* 44 px sur écran tactile */
+  --duree: 120ms;
+}
+
+@media (pointer: coarse), (max-width: 40rem) {
+  :root { --cible: var(--cible-tactile); }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-fond: #0e1621;
+    --c-surface: #1f2b3a;
+    --c-colonne: #172231;
+    --c-bordure: #334357;
+    --c-bordure-forte: #7f91a8;
+    --c-texte: #e6edf5;
+    --c-texte-doux: #aab7c7;
+    --c-primaire: #6aaef5;
+    --c-primaire-survol: #8cc1f8;
+    --c-sur-primaire: #06111e;
+    --c-primaire-pale: #1d3a5c;
+    --c-entete: #0a2747;
+    --c-sur-entete: #ffffff;
+    --c-accent: #ff9f5a;
+    --c-accent-pale: #4a2a12;
+    --c-sur-accent-pale: #ffd9bd;
+    --c-danger: #ff8a80;
+    --c-danger-pale: #4a1c19;
+    --c-sur-danger-pale: #ffd6d2;
+    --c-succes: #6fd08f;
+    --c-focus: #ff9f5a;
+    --c-focus-sur-fonce: #ffb27a;
+    --c-fantome: #2b3d54;
+    --c-voile: rgb(0 0 0 / 0.65);
+    --c-ajout-colonne: rgb(255 255 255 / 0.06);
+    --c-ombre: rgb(0 0 0 / 0.45);
+  }
+}

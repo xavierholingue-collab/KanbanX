@@ -1,0 +1,27 @@
+{
+  "id": "5f0000000000000000000001",
+  "name": "Export Trello <b>test</b>",
+  "closed": false,
+  "labels": [
+    { "id": "l1", "name": "Bug", "color": "red" },
+    { "id": "l2", "name": "Idée", "color": "yellow" },
+    { "id": "l3", "name": "", "color": "sky_dark" },
+    { "id": "l4", "name": "Sans couleur", "color": null }
+  ],
+  "lists": [
+    { "id": "L2", "name": "En cours", "closed": false, "pos": 2048 },
+    { "id": "L1", "name": "À faire", "closed": false, "pos": 1024 },
+    { "id": "L3", "name": "Archivée", "closed": true, "pos": 4096 }
+  ],
+  "cards": [
+    { "id": "c1", "name": "Deuxième", "desc": "", "idList": "L1", "closed": false, "pos": 200, "due": null, "idLabels": [] },
+    { "id": "c2", "name": "Première <script>alert(1)</script>", "desc": "Une **description**", "idList": "L1", "closed": false, "pos": 100, "due": "2026-12-24T11:00:00.000Z", "idLabels": ["l1", "l2"] },
+    { "id": "c3", "name": "En cours", "desc": "", "idList": "L2", "closed": false, "pos": 1, "due": null, "idLabels": ["l3", "l4"] },
+    { "id": "c4", "name": "Carte archivée", "desc": "", "idList": "L1", "closed": true, "pos": 300 },
+    { "id": "c5", "name": "Dans liste archivée", "desc": "", "idList": "L3", "closed": false, "pos": 1 }
+  ],
+  "actions": [
+    { "type": "commentCard", "date": "2026-11-01T10:00:00.000Z", "data": { "text": "Commentaire importé", "card": { "id": "c2" } }, "memberCreator": { "fullName": "Marie Exemple" } },
+    { "type": "updateCard", "date": "2026-11-02T10:00:00.000Z", "data": { "card": { "id": "c2" } } }
+  ]
+}
