@@ -86,10 +86,12 @@ function rendreCommentaire(x) {
       h('div.rangee', h('button.btn.btn-primaire', { type: 'button', onclick: () => finir(true) }, 'Enregistrer'), h('button.btn.btn-discret', { type: 'button', onclick: () => finir(false) }, 'Annuler'))));
   }
   return h(`li.commentaire${x.enAttente ? '.en-attente' : ''}`, { 'aria-busy': x.enAttente ? 'true' : undefined },
-    avatar(x.author),
+    avatar(x.imported ? { name: x.imported.name, kind: 'human' } : x.author),
     h('div.bulle-conteneur',
-      h('p.auteur', h('strong', x.client ? `${x.client} pour ${x.author.name}` : x.author.name),
-        x.author.kind === 'agent' ? h('span.badge-agent', 'agent') : x.client ? h('span.badge-agent', 'application') : '', ' ', horodatage(x.createdAt), x.editedAt ? h('span.vide', ' · modifié') : ''),
+      h('p.auteur', h('strong', x.imported ? x.imported.name : x.client ? `${x.client} pour ${x.author.name}` : x.author.name),
+        x.imported ? h('span.badge-agent', { title: `Importé par ${x.author.name}` }, 'importé de Trello')
+          : x.author.kind === 'agent' ? h('span.badge-agent', 'agent') : x.client ? h('span.badge-agent', 'application') : '', ' ', horodatage(x.createdAt), x.editedAt ? h('span.vide', ' · modifié') : '',
+        x.imported ? h('span.aide', ` · par ${x.author.name}`) : ''),
       htmlNettoye(h('div.bulle.markdown'), x.html ?? ''),
       moi && !x.enAttente && ecrit() ? h('div.rangee.actions-comm',
         h('button.btn.btn-discret', { type: 'button', 'data-comm': x.id, onclick: () => { D.edition = { id: x.id, texte: x.body }; dessiner(); } }, 'Modifier'),

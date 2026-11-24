@@ -199,3 +199,37 @@ test('point 7 : vue discrète des archives avec « Restaurer » ; le propriétai
   assert.deepEqual(px.erreurs, []);
   await px.context().close();
 });
+
+test('point 8 : à l\'import, associer un auteur Trello à une personne qui partage un tableau ; le commentaire l\'affiche', async () => {
+  const { xavier, eric } = await scene();
+  const exportTrello = {
+    name: 'Chantier importé', members: [{ id: 'm-eric', fullName: 'Eric Hoarau' }, { id: 'm-marie', fullName: 'Marie Exemple' }],
+    lists: [{ id: 'L1', name: 'À faire', pos: 1 }], cards: [{ id: 'c1', name: 'Devis', idList: 'L1', pos: 1 }], labels: [],
+    actions: [
+      { type: 'commentCard', date: '2026-10-01T09:00:00.000Z', idMemberCreator: 'm-eric', memberCreator: { id: 'm-eric', fullName: 'Eric Hoarau' }, data: { text: 'Je relance le fournisseur.', card: { id: 'c1' } } },
+      { type: 'commentCard', date: '2026-10-02T09:00:00.000Z', idMemberCreator: 'm-marie', memberCreator: { id: 'm-marie', fullName: 'Marie Exemple' }, data: { text: 'Vu.', card: { id: 'c1' } } },
+    ],
+  };
+  const v = [];
+  const px = await connecter(env, xavier);
+  await px.locator('#fichier-trello').setInputFiles({ name: 'trello.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exportTrello)) });
+  const d = px.getByRole('dialog', { name: 'Auteurs des commentaires Trello' });
+  await d.waitFor();
+  const selEric = d.getByLabel('Eric Hoarau');
+  assert.equal(await selEric.inputValue(), eric.id, 'proposé d\'après le prénom');
+  assert.equal(await d.getByLabel('Marie Exemple').inputValue(), '', 'aucune personne de ce nom : pas d\'association proposée');
+  const options = await selEric.locator('option').allTextContents();
+  assert.ok(!options.some((o) => o.includes('alexis')), 'seulement les personnes qui partagent un tableau');
+  v.push(...await auditer(px, 'association des auteurs Trello'));
+  await d.getByRole('button', { name: 'Importer le tableau' }).click();
+  await px.getByRole('link', { name: 'Devis' }).click();
+  const comm = px.locator('.commentaire', { hasText: 'Je relance le fournisseur.' });
+  await comm.waitFor();
+  assert.equal(await comm.locator('.auteur strong').textContent(), 'Eric');
+  await comm.getByText('importé de Trello').waitFor();
+  await px.locator('.commentaire', { hasText: 'Marie Exemple sur Trello' }).waitFor();
+  v.push(...await auditer(px, 'commentaires importés'));
+  assert.deepEqual(v, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close();
+});

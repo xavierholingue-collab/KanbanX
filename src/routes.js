@@ -41,9 +41,11 @@ r('PATCH', '/api/me/preferences', { auth: 'session', tag: 'Authentification', re
 // --- Tableaux ---
 r('GET', '/api/boards', { tag: 'Tableaux', resume: 'Lister les tableaux auxquels on est invité.' }, ({ ctx }) => S.listerTableaux(ctx));
 r('POST', '/api/boards', { tag: 'Tableaux', resume: 'Créer un tableau (trois colonnes par défaut). Le créateur en est propriétaire.', corps: { name: nom() } }, ({ ctx, body }) => S.creerTableau(ctx, body));
-r('POST', '/api/boards/import-trello', { tag: 'Tableaux', resume: 'Importer un tableau depuis un export JSON de Trello (corps : le fichier JSON tel quel, 10 Mo au plus).', corpsLibre: true, maxCorps: 10_000_000 },
+r('POST', '/api/boards/import-trello', { tag: 'Tableaux', resume: 'Importer un tableau depuis un export JSON de Trello (corps : le fichier JSON tel quel, ou { trello, correspondances } pour associer les membres Trello ; 10 Mo au plus).', corpsLibre: true, maxCorps: 10_000_000 },
 ({ ctx, body }) => importerTrello(ctx, body));
 r('GET', '/api/boards/archived', { tag: 'Tableaux', resume: 'Lister mes tableaux archivés (restaurables par leur propriétaire).' }, ({ ctx }) => S.listerTableauxArchives(ctx));
+r('GET', '/api/import-trello/personnes', { tag: 'Tableaux', resume: 'Personnes à qui associer les membres d\'un export Trello : celles qui partagent déjà un tableau avec moi.' },
+({ ctx }) => S.personnesPourImport(ctx));
 r('GET', '/api/boards/:id', { tag: 'Tableaux', resume: 'Lire un tableau complet : colonnes, cartes, membres, étiquettes.' }, ({ ctx, params }) => S.obtenirTableau(ctx, params.id));
 r('PATCH', '/api/boards/:id', { tag: 'Tableaux', resume: 'Renommer un tableau (propriétaire).', corps: { name: nom() } }, ({ ctx, params, body }) => S.renommerTableau(ctx, params.id, body));
 

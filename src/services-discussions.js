@@ -14,11 +14,14 @@ async function carteVisible(c, cardId) {
   return rows[0];
 }
 
-const SQL_COMM = `select m.id, m.card_id, m.body, m.mentions, m.created_at, m.edited_at, m.client_name, u.id as uid, u.name, u.kind
+const SQL_COMM = `select m.id, m.card_id, m.body, m.mentions, m.created_at, m.edited_at, m.client_name, m.imported_from, m.imported_author_name,
+    u.id as uid, u.name, u.kind
   from comments m join users u on u.id = m.author_id`;
 // client : application OAuth qui a écrit au nom de l'auteur (« Claude pour Eric »), sinon null.
 const versComm = (r, ps) => ({ id: r.id, cardId: r.card_id, body: r.body, html: rendreMarkdown(r.body, ps), mentions: r.mentions,
-  createdAt: r.created_at, editedAt: r.edited_at, author: { id: r.uid, name: r.name, kind: r.kind }, client: r.client_name });
+  createdAt: r.created_at, editedAt: r.edited_at, author: { id: r.uid, name: r.name, kind: r.kind }, client: r.client_name, ...importe(r) });
+// Commentaire importé et associé à une personne : son nom, et d'où il vient. L'auteur (propriétaire) reste author.
+const importe = (r) => (r.imported_from ? { imported: { from: r.imported_from, name: r.imported_author_name } } : {});
 
 export async function listerCommentaires(ctx, cardId) {
   return agir(ctx, async (c) => {
@@ -63,7 +66,7 @@ export async function carteComplete(ctx, cardId) {
       board: { id: r.board_id, name: r.board_name }, column: { id: r.column_id, name: r.column_name, archived: !!r.column_archived_at },
       assignees: responsables, labels: etiquettes,
       comments: commentaires.map((m) => ({ id: m.id, body: m.body, createdAt: m.created_at, editedAt: m.edited_at,
-        author: { id: m.uid, name: m.name, kind: m.kind }, client: m.client_name })),
+        author: { id: m.uid, name: m.name, kind: m.kind }, client: m.client_name, ...importe(m) })),
     };
   });
 }

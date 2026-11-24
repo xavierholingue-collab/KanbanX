@@ -381,3 +381,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 .tableaux-archives { margin-top: var(--e-5); }
 .tableaux-archives summary { cursor: pointer; padding: var(--e-2) 0; min-height: var(--cible); font-weight: 600; color: var(--c-texte-doux); }
 .tableaux-archives .liste-archives { margin-top: var(--e-2); max-width: 44rem; }
+/* Import Trello : association des auteurs */
+.liste-associations { list-style: none; margin: var(--e-3) 0; padding: 0; display: grid; gap: var(--e-3); }
+.association .champ { width: 100%; }
+.association p { margin: 0 0 var(--e-1); }

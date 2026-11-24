@@ -170,6 +170,11 @@ export async function archivesDuTableau(ctx, id) {
   });
 }
 
+/** Personnes (pas les agents) qui partagent déjà un tableau avec moi, moi compris : la RLS de users n'en montre pas d'autres. */
+export async function personnesPourImport(ctx) {
+  return agir(ctx, async (c) => (await c.query("select id, name, email from users where kind = 'human' and kx_shares_board(id) order by lower(name), email")).rows);
+}
+
 // ---------- Membres ----------
 
 export async function listerMembres(ctx, id) {

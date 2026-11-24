@@ -149,7 +149,8 @@ const OUTILS = [
   },
 ];
 /** « Claude pour Xavier » quand une application a écrit au nom de la personne, sinon son nom. */
-const signature = (m) => (m.client ? `${m.client} pour ${m.author.name}` : m.author.name);
+const signature = (m) => (m.imported ? `${m.imported.name} (importé de Trello par ${m.author.name})`
+  : m.client ? `${m.client} pour ${m.author.name}` : m.author.name);
 
 function versFil(m) {
   return { id: m.id, ...(m.where ? { endroit: m.where } : {}), texte: m.body, auteur: signature(m), date: m.createdAt, carte: { id: m.card.id, titre: m.card.title }, tableau: { id: m.board.id, nom: m.board.name } };
