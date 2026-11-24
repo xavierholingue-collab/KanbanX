@@ -89,3 +89,21 @@ test('point 2 : « Mes mentions » sur téléphone, en sombre, et suggestions da
   assert.equal(largeur, true, 'pas de défilement horizontal');
   await px.context().close(); await pe.context().close();
 });
+
+test('point 3 : « @Claude » est proposé dans les suggestions même sans compte Claude membre, et mis en évidence', async () => {
+  const { xavier, b, carte } = await scene();
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}/c/${carte.id}`);
+  const champ = px.getByRole('combobox', { name: 'Nouveau commentaire' });
+  await champ.click();
+  await px.keyboard.type('@cl');
+  await px.getByRole('option', { name: /Claude — le Claude de chaque membre/ }).waitFor();
+  const v = await auditer(px, 'suggestion @Claude');
+  await px.keyboard.press('Enter');
+  await px.keyboard.type('résume la carte');
+  await px.keyboard.press('Control+Enter');
+  await px.locator('.commentaire .bulle .mention', { hasText: '@Claude' }).waitFor();
+  assert.deepEqual(v, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close();
+});

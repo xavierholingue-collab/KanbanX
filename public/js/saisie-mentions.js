@@ -4,6 +4,8 @@
 import { h, avatar } from './dom.js';
 
 let compteur = 0;
+// « @Claude » est toujours proposé : la mention va au Claude de chaque membre qui l'a branché.
+const avecClaude = (l) => (l.some((m) => norm(m.name.split(/\s+/)[0]) === 'claude') ? l : [...l, { id: 'claude', name: 'Claude', kind: 'agent', claude: true }]);
 const norm = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 /**
@@ -27,11 +29,11 @@ export function avecMentions(champ, membres) {
   const afficher = () => {
     const r = requete();
     if (r === null) return fermer();
-    choix = membres().filter((m) => norm(m.name).startsWith(norm(r))).slice(0, 6);
+    choix = avecClaude(membres()).filter((m) => norm(m.name).startsWith(norm(r))).slice(0, 6);
     if (!choix.length) return fermer();
     actif = Math.min(actif, choix.length - 1);
     liste.replaceChildren(...choix.map((m, i) => h('li.option', { role: 'option', id: `${id}-${i}`, 'aria-selected': String(i === actif),
-      onpointerdown: (e) => { e.preventDefault(); inserer(m); } }, avatar(m), m.name, m.kind === 'agent' ? ' (agent)' : '')));
+      onpointerdown: (e) => { e.preventDefault(); inserer(m); } }, avatar(m), m.name, m.claude ? h('span.aide', ' — le Claude de chaque membre') : m.kind === 'agent' ? ' (agent)' : '')));
     liste.hidden = false;
     champ.setAttribute('aria-expanded', 'true');
     champ.setAttribute('aria-activedescendant', `${id}-${actif}`);

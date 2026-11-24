@@ -2,9 +2,10 @@
 import { agir, journal, roleSur, exigerEcriture } from './services.js';
 import { introuvable, interdit } from './erreurs.js';
 import { rendreMarkdown, prenom } from './markdown.js';
-import { membresDuTableau, resoudreMentions } from './mentions.js';
+import { membresDuTableau, resoudreMentions, citeClaude } from './mentions.js';
 
-const prenoms = (membres) => new Set(membres.map((m) => prenom(m.name)));
+// « @Claude » est toujours une mention (point 3) : elle est mise en évidence comme celles des membres.
+const prenoms = (membres) => new Set(['claude', ...membres.map((m) => prenom(m.name))]);
 
 async function carteVisible(c, cardId) {
   const { rows } = await c.query('select id, board_id, title from cards where id = $1', [cardId]);
@@ -34,8 +35,8 @@ export async function ajouterCommentaire(ctx, cardId, { body }) {
     exigerEcriture(await roleSur(c, k.board_id));
     const membres = await membresDuTableau(c, k.board_id);
     const mentions = resoudreMentions(body, membres);
-    const { rows } = await c.query('insert into comments (board_id, card_id, author_id, body, mentions, client_name) values ($1, $2, $3, $4, $5, $6) returning id',
-      [k.board_id, cardId, ctx.user.id, body, mentions, ctx.application ?? null]);
+    const { rows } = await c.query(`insert into comments (board_id, card_id, author_id, body, mentions, client_name, mentions_claude)
+      values ($1, $2, $3, $4, $5, $6, $7) returning id`, [k.board_id, cardId, ctx.user.id, body, mentions, ctx.application ?? null, citeClaude(body, ctx)]);
     await journal(c, ctx, k.board_id, cardId, 'commentaire.ajoute', { title: k.title, commentId: rows[0].id, mentions });
     emit(k.board_id, { kind: 'comment', id: rows[0].id, cardId });
     return versComm((await c.query(`${SQL_COMM} where m.id = $1`, [rows[0].id])).rows[0], prenoms(membres));
@@ -77,7 +78,8 @@ export async function modifierCommentaire(ctx, id, { body }) {
   return agir(ctx, async (c, emit) => {
     const m = await commentaireDeLAuteur(c, ctx, id);
     const membres = await membresDuTableau(c, m.board_id);
-    await c.query('update comments set body = $2, mentions = $3, edited_at = now() where id = $1', [id, body, resoudreMentions(body, membres)]);
+    await c.query('update comments set body = $2, mentions = $3, mentions_claude = $4, edited_at = now() where id = $1',
+      [id, body, resoudreMentions(body, membres), citeClaude(body, ctx)]);
     await journal(c, ctx, m.board_id, m.card_id, 'commentaire.modifie', { commentId: id });
     emit(m.board_id, { kind: 'comment', id, cardId: m.card_id });
     return versComm((await c.query(`${SQL_COMM} where m.id = $1`, [id])).rows[0], prenoms(membres));

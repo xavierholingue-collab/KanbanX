@@ -255,7 +255,7 @@ export async function creerCarte(ctx, colonneId, { title }) {
 
 async function prenomsMembres(c, boardId) {
   const { rows } = await c.query('select u.name from board_members m join users u on u.id = m.user_id where m.board_id = $1', [boardId]);
-  return new Set(rows.map((r) => prenom(r.name)));
+  return new Set(['claude', ...rows.map((r) => prenom(r.name))]); // « @Claude » est toujours une mention
 }
 
 export async function obtenirCarte(ctx, id) {
