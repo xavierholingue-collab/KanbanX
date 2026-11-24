@@ -52,7 +52,8 @@ r('PATCH', '/api/boards/:id/members/:userId', { tag: 'Membres', resume: 'Changer
 r('DELETE', '/api/boards/:id/members/:userId', { tag: 'Membres', resume: 'Retirer un membre (propriétaire), ou quitter le tableau.' }, ({ ctx, params }) => S.retirerMembre(ctx, params.id, params.userId));
 
 // --- Colonnes ---
-r('POST', '/api/boards/:id/columns', { tag: 'Colonnes', resume: 'Créer une colonne, à la fin.', corps: { name: nom() } }, ({ ctx, params, body }) => S.creerColonne(ctx, params.id, body));
+r('POST', '/api/boards/:id/columns', { tag: 'Colonnes', resume: 'Créer une colonne, à la fin ou à un index donné (0 = première).',
+  corps: { name: nom(), index: { type: 'integer', min: 0, max: 1000 } } }, ({ ctx, params, body }) => S.creerColonne(ctx, params.id, body));
 r('PATCH', '/api/columns/:id', { tag: 'Colonnes', resume: 'Renommer une colonne ou fixer sa limite d\'en-cours (WIP).',
   corps: { name: nom(100, false), wipLimit: { type: 'integer', min: 1, max: 999, nullable: true } } }, ({ ctx, params, body }) => S.modifierColonne(ctx, params.id, body));
 r('POST', '/api/columns/:id/move', { tag: 'Colonnes', resume: 'Réordonner une colonne : nouvel index (0 = première).', corps: { index: { type: 'integer', min: 0, max: 10000, required: true } } },

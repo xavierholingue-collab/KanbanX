@@ -62,8 +62,9 @@ claude mcp add --transport http kanbanx http://localhost:3000/mcp \
 ```
 
 Outils exposés : `lister_tableaux`, `lire_tableau`, `lire_carte`, `creer_carte`,
-`modifier_carte`, `deplacer_carte`, `ajouter_commentaire`,
-`lire_commentaires_recents`, `lire_mentions`. Chaque action est signée
+`modifier_carte`, `deplacer_carte`, `ajouter_commentaire`, `creer_colonne`,
+`renommer_colonne`, `deplacer_colonne`, `lire_commentaires_recents`,
+`lire_mentions` (avec « @Claude », adressée au Claude de chaque membre). Chaque action est signée
 « Claude » (via MCP) dans l'historique.
 
 ## Organisation du code

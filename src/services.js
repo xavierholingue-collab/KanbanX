@@ -182,11 +182,15 @@ async function lireColonne(c, id) {
 }
 const versColonne = (k) => ({ id: k.id, name: k.name, wipLimit: k.wip_limit, position: k.position });
 
-export async function creerColonne(ctx, boardId, { name }) {
+/** Crée une colonne à la fin, ou à l'index donné (0 = première) parmi les colonnes non archivées. */
+export async function creerColonne(ctx, boardId, { name, index }) {
   return agir(ctx, async (c, emit) => {
     await roleEcriture(c, boardId);
-    const { rows: p } = await c.query('select coalesce(max(position), 0) + $2 as p from columns where board_id = $1', [boardId, PAS]);
-    const k = (await c.query('insert into columns (board_id, name, position) values ($1, $2, $3) returning *', [boardId, name, p[0].p])).rows[0];
+    let position;
+    if (index === undefined || index === null) {
+      position = (await c.query('select coalesce(max(position), 0) + $2 as p from columns where board_id = $1', [boardId, PAS])).rows[0].p;
+    } else position = await positionColonne(c, boardId, index);
+    const k = (await c.query('insert into columns (board_id, name, position) values ($1, $2, $3) returning *', [boardId, name, position])).rows[0];
     await journal(c, ctx, boardId, null, 'colonne.creee', { name });
     emit(boardId, { kind: 'column', id: k.id });
     return versColonne(k);
