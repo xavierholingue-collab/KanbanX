@@ -233,3 +233,48 @@ test('point 8 : à l\'import, associer un auteur Trello à une personne qui part
   assert.deepEqual(px.erreurs, []);
   await px.context().close();
 });
+
+test('point 9 : import avec clé et jeton, image rapatriée affichée ; sans clé, encart « image restée sur Trello »', async () => {
+  const http = await import('node:http');
+  const { reglages } = await import('../src/telechargement.js');
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  const faux = http.createServer((q, r) => {
+    if (q.headers.authorization !== 'OAuth oauth_consumer_key="cle-fictive-1234", oauth_token="jeton-fictif-5678"') { r.writeHead(401); return r.end(); }
+    r.writeHead(200, { 'Content-Type': 'text/html' }); r.end(PNG);
+  });
+  await new Promise((r) => faux.listen(0, '127.0.0.1', r));
+  const avant = { ...reglages };
+  Object.assign(reglages, { protocoles: ['http:'], resoudre: async () => ({ address: '127.0.0.1', family: 4 }), adresseAutorisee: (ip) => ip === '127.0.0.1' });
+  const pj = `http://trello.com:${faux.address().port}/1/cards/c1/attachments/a1/download/maquette.png`;
+  const exp = (nom) => ({ name: nom, lists: [{ id: 'L1', name: 'À faire', pos: 1 }], labels: [], actions: [],
+    cards: [{ id: 'c1', name: 'Maquette', idList: 'L1', pos: 1, desc: 'La maquette :', attachments: [{ id: 'a1', name: 'maquette.png', url: pj, isUpload: true, mimeType: 'image/png' }] }] });
+  try {
+    const xavier = await creerUtilisateur('Xavier');
+    const v = [];
+    for (const [nom, opts, avecCle] of [['ordinateur, clair', {}, true], ['téléphone, sombre', { telephone: true, sombre: true }, false]]) {
+      const px = await connecter(env, xavier, opts);
+      await px.locator('#fichier-trello').setInputFiles({ name: 't.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exp(`Images ${nom}`))) });
+      const d = px.getByRole('dialog', { name: 'Importer le tableau Trello' });
+      await d.getByRole('heading', { name: 'Images (1)' }).waitFor();
+      v.push(...await auditer(px, `import avec images (${nom})`));
+      if (avecCle) {
+        await d.getByLabel('Clé d\'API Trello (facultative)').fill('cle-fictive-1234');
+        await d.getByLabel('Jeton Trello (facultatif)').fill('jeton-fictif-5678');
+      }
+      await d.getByRole('button', { name: 'Importer le tableau' }).click();
+      await px.getByRole('link', { name: 'Maquette' }).click();
+      const dialog = px.getByRole('dialog', { name: 'Maquette' });
+      if (avecCle) {
+        const img = dialog.locator('.markdown img[alt="maquette.png"]');
+        await img.waitFor();
+        await px.waitForFunction(() => document.querySelector('.markdown img')?.naturalWidth === 1);
+      } else {
+        await dialog.locator('.markdown blockquote', { hasText: 'Image restée sur Trello' }).waitFor();
+      }
+      v.push(...await auditer(px, `carte importée (${nom})`));
+      assert.deepEqual(px.erreurs, []);
+      await px.context().close();
+    }
+    assert.deepEqual(v, []);
+  } finally { Object.assign(reglages, avant); faux.close(); }
+});

@@ -5,6 +5,7 @@ import { cookieSession } from './securite.js';
 import { config } from './config.js';
 import { ErreurHttp } from './erreurs.js';
 import { importerTrello } from './import-trello.js';
+import { lireImage } from './images.js';
 
 export const FLUX = Symbol('flux');
 const nom = (max = 100, required = true) => ({ type: 'string', min: 1, max, required });
@@ -84,6 +85,20 @@ r('POST', '/api/cards/:id/move', { tag: 'Cartes', resume: 'Déplacer une carte :
   corps: { columnId: { type: 'uuid' }, index: { type: 'integer', min: 0, max: 10000, required: true } } }, ({ ctx, params, body }) => S.deplacerCarte(ctx, params.id, body));
 r('POST', '/api/cards/:id/archive', { tag: 'Cartes', resume: 'Archiver une carte (annulable).' }, ({ ctx, params }) => S.archiverCarte(ctx, params.id, true));
 r('POST', '/api/cards/:id/restore', { tag: 'Cartes', resume: 'Restaurer une carte archivée.' }, ({ ctx, params }) => S.archiverCarte(ctx, params.id, false));
+
+// --- Images (rapatriées de Trello) ---
+// Type fixé par le serveur (signature vérifiée à l'enregistrement), jamais deviné par le navigateur ; affichée en
+// ligne, dans un bac à sable sans aucun droit (CSP sandbox) si on l'ouvre seule.
+r('GET', '/api/images/:id', { tag: 'Cartes', resume: 'Lire une image d\'un tableau (PNG, JPEG, GIF ou WebP), avec les droits de la personne.' },
+async ({ ctx, params, res }) => {
+  const img = await lireImage(ctx, params.id);
+  res.writeHead(200, {
+    'Content-Type': img.mime, 'Content-Length': String(img.contenu.length), 'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'inline', 'Content-Security-Policy': "sandbox; default-src 'none'", 'Cache-Control': 'private, max-age=86400',
+  });
+  res.end(img.contenu);
+  return FLUX;
+});
 
 // --- Étiquettes ---
 r('POST', '/api/boards/:id/labels', { tag: 'Étiquettes', resume: 'Créer une étiquette de couleur.', corps: { name: { type: 'string', max: 40 }, color: { type: 'string', enum: COULEURS, required: true } } },

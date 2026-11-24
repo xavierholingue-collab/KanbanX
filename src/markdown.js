@@ -21,6 +21,9 @@ function enLigne(brut, prenomsConnus) {
   const garder = (html) => { morceaux.push(html); return `\u0000${morceaux.length - 1}\u0000`; };
   let s = echapper(brut.replaceAll('\u0000', ''));
   s = s.replace(/`([^`\n]+)`/g, (_, c) => garder(`<code>${c}</code>`));
+  // Images : uniquement celles servies par KanbanX (/api/images/<uuid>), jamais une adresse extérieure.
+  s = s.replace(/!\[([^\]\n]*)\]\(\/api\/images\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/g,
+    (_, alt, id) => garder(`<img src="/api/images/${id}" alt="${alt}" loading="lazy">`));
   s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, texte, url) => {
     if (!/^(https?:\/\/|mailto:)/i.test(url)) return m;
     return garder(`<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${texte}</a>`);

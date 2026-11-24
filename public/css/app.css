@@ -385,3 +385,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 .liste-associations { list-style: none; margin: var(--e-3) 0; padding: 0; display: grid; gap: var(--e-3); }
 .association .champ { width: 100%; }
 .association p { margin: 0 0 var(--e-1); }
+.import-images { margin-top: var(--e-4); display: grid; gap: var(--e-2); }
+.import-images .champ { width: 100%; }
+/* Images rapatriées (servies par KanbanX) */
+.markdown img { max-width: 100%; height: auto; border-radius: var(--rayon-s, 4px); border: 1px solid var(--c-bordure); }

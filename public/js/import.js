@@ -30,11 +30,20 @@ function proposer(auteur, personnes) {
   return ok.length === 1 ? ok[0].id : '';
 }
 
+/** Nombre d'images jointes aux cartes ouvertes de l'export. */
+export function imagesTrello(data) {
+  const ext = /\.(png|jpe?g|gif|webp|svg)$/i;
+  return (Array.isArray(data.cards) ? data.cards : []).filter((k) => k && !k.closed)
+    .flatMap((k) => (Array.isArray(k.attachments) ? k.attachments : []))
+    .filter((pj) => pj && typeof pj.url === 'string' && pj.isUpload !== false && (String(pj.mimeType ?? '').startsWith('image/') || ext.test(pj.name ?? ''))).length;
+}
+
 export async function importerFichier(data) {
   const auteurs = auteursTrello(data);
-  if (!auteurs.length) return envoyer(data, {});
-  let personnes;
-  try { personnes = await get('/api/import-trello/personnes'); } catch (e) { return erreur(e.message); }
+  const nbImages = imagesTrello(data);
+  if (!auteurs.length && !nbImages) return envoyer(data, {});
+  let personnes = [];
+  if (auteurs.length) { try { personnes = await get('/api/import-trello/personnes'); } catch (e) { return erreur(e.message); } }
   const choix = new Map();
   const lignes = auteurs.map((a, i) => {
     const sel = h('select.champ', { id: `assoc-${i}`, 'aria-describedby': `assoc-aide-${i}` },
@@ -47,18 +56,29 @@ export async function importerFichier(data) {
       h('p.aide', { id: `assoc-aide-${i}` }, `${a.n} commentaire${a.n > 1 ? 's' : ''} sur Trello`),
       sel);
   });
+  // Clé et jeton d'API Trello : facultatifs, servent à cette seule requête (jamais stockés ni journalisés).
+  const cle = h('input.champ#trello-cle', { type: 'password', autocomplete: 'off', spellcheck: 'false', maxlength: 256, 'aria-describedby': 'aide-trello-auth' });
+  const jeton = h('input.champ#trello-jeton', { type: 'password', autocomplete: 'off', spellcheck: 'false', maxlength: 512, 'aria-describedby': 'aide-trello-auth' });
+  const blocImages = nbImages ? h('section.import-images', { 'aria-labelledby': 'h-import-images' },
+    h('h3#h-import-images', `Images (${nbImages})`),
+    h('p.aide#aide-trello-auth', 'Pour rapatrier les images dans KanbanX, Trello exige votre clé et votre jeton d\'API (trello.com/power-ups/admin). Ils ne servent qu\'à cet import : ils ne sont ni enregistrés ni conservés. Sans eux, les images restent des liens vers Trello.'),
+    h('div', h('label.etiquette-champ', { for: 'trello-cle' }, 'Clé d\'API Trello (facultative)'), cle),
+    h('div', h('label.etiquette-champ', { for: 'trello-jeton' }, 'Jeton Trello (facultatif)'), jeton)) : '';
   const d = h('dialog.dialog-lateral', { 'aria-labelledby': 'titre-assoc' },
-    h('div.dialog-entete', h('h2#titre-assoc', icone('membres'), ' Auteurs des commentaires Trello'),
+    h('div.dialog-entete', h('h2#titre-assoc', icone('membres'), auteurs.length ? ' Auteurs des commentaires Trello' : ' Importer le tableau Trello'),
       h('button.btn.btn-icone.btn-discret', { type: 'button', 'aria-label': 'Annuler l\'import', onclick: () => d.close() }, icone('x'))),
     h('form.dialog-corps', { onsubmit: async (e) => {
       e.preventDefault();
       const correspondances = Object.fromEntries([...choix].filter(([, s]) => s.value).map(([k, s]) => [k, s.value]));
       const bouton = e.submitter; if (bouton) bouton.disabled = true;
-      const ok = await envoyer(data, correspondances);
+      const auth = cle.value.trim() && jeton.value.trim() ? { cle: cle.value.trim(), jeton: jeton.value.trim() } : null;
+      cle.value = ''; jeton.value = ''; // rien ne reste dans la page
+      const ok = await envoyer(data, correspondances, auth);
       if (ok) d.close(); else if (bouton) bouton.disabled = false;
     } },
-    h('p.aide', 'Associez chaque auteur à une personne qui partage déjà un tableau avec vous. Ses commentaires afficheront son nom, avec « importé de Trello ». Ils restent les vôtres : vous seul pourrez les modifier.'),
-    h('ul.liste-associations', lignes),
+    auteurs.length ? [h('p.aide', 'Associez chaque auteur à une personne qui partage déjà un tableau avec vous. Ses commentaires afficheront son nom, avec « importé de Trello ». Ils restent les vôtres : vous seul pourrez les modifier.'),
+      h('ul.liste-associations', lignes)] : '',
+    blocImages,
     h('div.rangee', h('button.btn.btn-primaire', { type: 'submit' }, 'Importer le tableau'), h('button.btn.btn-discret', { type: 'button', onclick: () => d.close() }, 'Annuler'))));
   d.addEventListener('close', () => { d.remove(); document.getElementById('fichier-trello')?.focus(); });
   document.body.append(d);
@@ -67,11 +87,12 @@ export async function importerFichier(data) {
   d.querySelector('h2')?.focus();
 }
 
-async function envoyer(data, correspondances) {
+async function envoyer(data, correspondances, auth = null) {
   try {
-    const r = await post('/api/boards/import-trello', Object.keys(correspondances).length ? { trello: data, correspondances } : data);
+    const enveloppe = Object.keys(correspondances).length || auth;
+    const r = await post('/api/boards/import-trello', enveloppe ? { trello: data, correspondances, ...(auth ? { trelloAuth: auth } : {}) } : data);
     const pl = (n, m) => `${n} ${m}${n > 1 ? 's' : ''}`;
-    toast(`Tableau « ${r.name} » importé : ${pl(r.colonnes, 'colonne')}, ${pl(r.cartes, 'carte')}, ${pl(r.commentaires, 'commentaire')}.`);
+    toast(`Tableau « ${r.name} » importé : ${pl(r.colonnes, 'colonne')}, ${pl(r.cartes, 'carte')}, ${pl(r.commentaires, 'commentaire')}${r.images ? `, ${pl(r.images, 'image')}` : ''}.`);
     naviguer(`/b/${r.id}`);
     return true;
   } catch (err) { erreur(`Import impossible : ${err.message}`); return false; }
