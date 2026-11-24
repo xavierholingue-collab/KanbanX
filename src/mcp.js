@@ -112,7 +112,7 @@ const OUTILS = [
   },
   {
     name: 'lire_mentions', title: 'Lire mes mentions',
-    description: 'Commentaires qui te mentionnent (@prénom), du plus récent au plus ancien : ce qu\'on attend de toi.',
+    description: 'Ce qui te mentionne (@prénom), du plus récent au plus ancien : ce qu\'on attend de toi. Chaque mention dit son endroit : commentaire, titre ou description de la carte. Lis la carte avec lire_carte avant de répondre.',
     schema: { limite: { type: 'integer', min: 1, max: 100 } }, lecture: true,
     run: async (ctx, a) => ({ mentions: (await D.mentionsDe(ctx, a.limite ?? 20)).map(versFil) }),
   },
@@ -121,7 +121,7 @@ const OUTILS = [
 const signature = (m) => (m.client ? `${m.client} pour ${m.author.name}` : m.author.name);
 
 function versFil(m) {
-  return { id: m.id, texte: m.body, auteur: m.author.name, date: m.createdAt, carte: { id: m.card.id, titre: m.card.title }, tableau: { id: m.board.id, nom: m.board.name } };
+  return { id: m.id, ...(m.where ? { endroit: m.where } : {}), texte: m.body, auteur: signature(m), date: m.createdAt, carte: { id: m.card.id, titre: m.card.title }, tableau: { id: m.board.id, nom: m.board.name } };
 }
 
 const reponse = (res, status, corps, entetes = {}) => {

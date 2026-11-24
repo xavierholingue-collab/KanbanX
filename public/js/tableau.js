@@ -8,6 +8,7 @@ import { ouvrirCarte, fermerCarte, carteOuverte, rafraichirCarte } from './carte
 import { ouvrirMembres } from './membres.js';
 import { ouvrirActivite } from './activite.js';
 import { naviguer } from './app.js';
+import { avecMentions } from './saisie-mentions.js';
 
 export const T = {
   tableau: null, moi: null, racine: null,
@@ -359,7 +360,7 @@ function composeur(k) {
     }, 150);
   });
   return h('form.composeur', { onsubmit: (e) => { e.preventDefault(); valider(); } },
-    champ,
+    avecMentions(champ, () => T.tableau.members),
     h('div.rangee', h('button.btn.btn-primaire', { type: 'submit' }, 'Ajouter une carte'),
       h('button.btn.btn-icone.btn-discret', { type: 'button', 'aria-label': 'Annuler l\'ajout', onclick: fermer }, icone('x'))));
 }
@@ -412,7 +413,7 @@ function champEdition(etatE, enregistrer, libelle, max) {
 
 function rendreCarte(c, k) {
   if (T.ui.edition?.type === 'carte' && T.ui.edition.id === c.id) {
-    return h('li.carte', { dataset: { cardId: c.id } }, champEdition(T.ui.edition, (v) => renommerCarte(c.id, v), 'Titre de la carte', 300));
+    return h('li.carte', { dataset: { cardId: c.id } }, avecMentions(champEdition(T.ui.edition, (v) => renommerCarte(c.id, v), 'Titre de la carte', 300), () => T.tableau.members));
   }
   const ech = etatEcheance(c.dueDate);
   const etiqs = c.labels.map(etiquette).filter(Boolean);

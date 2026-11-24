@@ -2,6 +2,7 @@
 import { h, icone, avatar, htmlNettoye, annoncer } from './dom.js';
 import { get, post, patch, del } from './api.js';
 import { toast, erreur } from './toasts.js';
+import { avecMentions } from './saisie-mentions.js';
 import { ligneActivite, horodatage } from './activite.js';
 
 // État conservé entre deux rendus de la fenêtre (brouillon, données en cache).
@@ -81,7 +82,7 @@ function rendreCommentaire(x) {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finir(true); }
     });
     setTimeout(() => champ.focus(), 0);
-    return h('li.commentaire', avatar(x.author), h('div.bulle-edition', champ,
+    return h('li.commentaire', avatar(x.author), h('div.bulle-edition', avecMentions(champ, () => D.T.tableau.members),
       h('div.rangee', h('button.btn.btn-primaire', { type: 'button', onclick: () => finir(true) }, 'Enregistrer'), h('button.btn.btn-discret', { type: 'button', onclick: () => finir(false) }, 'Annuler'))));
   }
   return h(`li.commentaire${x.enAttente ? '.en-attente' : ''}`, { 'aria-busy': x.enAttente ? 'true' : undefined },
@@ -114,41 +115,11 @@ async function supprimer(x) {
 // ---------- Composeur avec suggestions de mentions ----------
 
 function composeur() {
-  const membres = D.T.tableau.members;
   const champ = h('textarea.champ#nouveau-commentaire', {
     rows: 2, maxlength: 10000, placeholder: 'Écrire un commentaire… (@prénom pour mentionner)', 'aria-label': 'Nouveau commentaire',
-    role: 'combobox', 'aria-autocomplete': 'list', 'aria-expanded': 'false', 'aria-controls': 'suggestions-mentions', 'aria-describedby': 'aide-comm' });
+    'aria-describedby': 'aide-comm' });
   champ.value = D.brouillon;
-  const liste = h('ul.suggestions#suggestions-mentions', { role: 'listbox', 'aria-label': 'Membres à mentionner', hidden: true });
-  let choix = []; let actif = 0;
-  const fermer = () => { liste.hidden = true; champ.setAttribute('aria-expanded', 'false'); champ.removeAttribute('aria-activedescendant'); choix = []; };
-  const requete = () => {
-    const avant = champ.value.slice(0, champ.selectionStart);
-    const m = avant.match(/(?:^|[^\p{L}\p{N}_@])@([\p{L}\p{N}_-]*)$/u);
-    return m ? m[1] : null;
-  };
-  const norm = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-  const afficher = () => {
-    const r = requete();
-    if (r === null) return fermer();
-    choix = membres.filter((m) => norm(m.name).startsWith(norm(r))).slice(0, 6);
-    if (!choix.length) return fermer();
-    actif = Math.min(actif, choix.length - 1);
-    liste.replaceChildren(...choix.map((m, i) => h('li.option', { role: 'option', id: `sugg-${i}`, 'aria-selected': String(i === actif),
-      onpointerdown: (e) => { e.preventDefault(); inserer(m); } }, avatar(m), m.name, m.kind === 'agent' ? ' (agent)' : '')));
-    liste.hidden = false;
-    champ.setAttribute('aria-expanded', 'true');
-    champ.setAttribute('aria-activedescendant', `sugg-${actif}`);
-  };
-  const inserer = (m) => {
-    const pos = champ.selectionStart;
-    const avant = champ.value.slice(0, pos).replace(/@([\p{L}\p{N}_-]*)$/u, `@${m.name.split(/\s+/)[0]} `);
-    champ.value = avant + champ.value.slice(pos);
-    champ.setSelectionRange(avant.length, avant.length);
-    D.brouillon = champ.value;
-    fermer();
-    champ.focus();
-  };
+  const zone = avecMentions(champ, () => D.T.tableau.members);
   const envoyer = async () => {
     const texte = champ.value.trim();
     if (!texte) return champ.focus();
@@ -176,22 +147,14 @@ function composeur() {
       erreur(`Commentaire non publié : ${e.message}`);
     }
   };
-  champ.addEventListener('input', () => { D.brouillon = champ.value; actif = 0; afficher(); });
-  champ.addEventListener('click', afficher);
-  champ.addEventListener('blur', () => setTimeout(fermer, 100));
+  champ.addEventListener('input', () => { D.brouillon = champ.value; });
   champ.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); fermer(); return envoyer(); }
-    if (!liste.hidden && choix.length) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); actif = (actif + 1) % choix.length; return afficher(); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); actif = (actif - 1 + choix.length) % choix.length; return afficher(); }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); return inserer(choix[actif]); }
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return fermer(); }
-    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); return envoyer(); }
     if (e.key === 'Escape' && champ.value) { e.preventDefault(); e.stopPropagation(); champ.blur(); }
   });
   return h('form.composeur-commentaire', { onsubmit: (e) => { e.preventDefault(); envoyer(); } },
     avatar(D.T.moi.kind ? D.T.moi : { ...D.T.moi, kind: 'human' }),
-    h('div.zone-comm', h('div.popover', champ, liste),
+    h('div.zone-comm', zone,
       h('p.aide#aide-comm', 'Markdown accepté. @ pour mentionner, Ctrl+Entrée pour publier.'),
       h('button.btn.btn-primaire', { type: 'submit' }, 'Commenter')));
 }

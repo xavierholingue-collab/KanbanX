@@ -350,3 +350,16 @@ h1[tabindex="-1"]:focus { outline: none; }
 }
 .application-texte p { margin: 0; }
 .adresse-mcp { display: inline-block; padding: var(--e-1) var(--e-2); background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-s, 4px); user-select: all; overflow-wrap: anywhere; }
+
+/* Mes mentions */
+.liste-mentions { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--e-2); }
+.mention {
+  display: flex; align-items: flex-start; gap: var(--e-3);
+  padding: var(--e-3) var(--e-4); background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-m);
+}
+.mention-texte { min-width: 0; flex: 1; }
+.mention-texte p { margin: 0; }
+.mention-texte a { overflow-wrap: anywhere; font-weight: 600; }
+.mention-extrait { margin: var(--e-1) 0; padding-left: var(--e-2); border-left: 3px solid var(--c-accent, var(--c-bordure)); overflow-wrap: anywhere; }
+/* Suggestions @ dans les champs de titre et de description */
+.popover-mentions { width: 100%; min-width: 0; flex: 1; }

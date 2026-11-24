@@ -5,6 +5,7 @@ import { erreur } from './toasts.js';
 import { T, optimiste, trouverCarte, membre, etiquette, archiverCarte, rendre as rendreTableau } from './tableau.js';
 import { naviguer } from './app.js';
 import { rendreDiscussion } from './discussion.js';
+import { avecMentions } from './saisie-mentions.js';
 
 const COULEURS = ['bleu', 'turquoise', 'vert', 'orange', 'rouge', 'violet', 'ardoise', 'brun'];
 const M = { id: null, dialog: null, detail: null, editionTitre: null, editionDesc: null, menu: null };
@@ -71,22 +72,23 @@ function rendreModal(focusTitre) {
   // Titre (clic pour renommer)
   let titre;
   if (M.editionTitre) {
-    titre = h('textarea.champ.titre-editable#titre-carte', { rows: 1, maxlength: 300, 'aria-label': 'Titre de la carte' });
-    titre.value = M.editionTitre.texte;
+    const champTitre = h('textarea.champ.titre-editable#titre-carte', { rows: 1, maxlength: 300, 'aria-label': 'Titre de la carte' });
+    champTitre.value = M.editionTitre.texte;
     const finir = (garder) => {
       if (!M.editionTitre) return;
-      const v = titre.value.replace(/\s+/g, ' ').trim();
+      const v = champTitre.value.replace(/\s+/g, ' ').trim();
       M.editionTitre = null;
       if (garder && v && v !== carte.title) majCarte({ title: v }, (c) => { c.title = v; });
       rendreModal(false);
       M.dialog.querySelector('#titre-carte')?.focus();
     };
-    titre.addEventListener('input', () => { M.editionTitre.texte = titre.value; });
-    titre.addEventListener('keydown', (e) => {
+    champTitre.addEventListener('input', () => { M.editionTitre.texte = champTitre.value; });
+    champTitre.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); finir(true); }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finir(false); }
     });
-    titre.addEventListener('blur', () => setTimeout(() => finir(true), 0));
+    champTitre.addEventListener('blur', () => setTimeout(() => finir(true), 0));
+    titre = avecMentions(champTitre, () => T.tableau.members);
   } else {
     titre = h('h2', { class: 'titre-h' }, ecrit()
       ? h('button.titre-editable#titre-carte', { type: 'button', title: 'Cliquer pour renommer', onclick: () => { M.editionTitre = { texte: carte.title }; rendreModal(false); const t = M.dialog.querySelector('#titre-carte'); t?.focus(); t?.select(); } }, carte.title)
@@ -159,8 +161,8 @@ function zoneDescription(d) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finir(false); }
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finir(true); }
     });
-    return h('div', champ,
-      h('p.aide#aide-md', 'Markdown : **gras**, *italique*, `code`, listes « - », [lien](https://…). Ctrl+Entrée pour enregistrer, Échap pour annuler.'),
+    return h('div', avecMentions(champ, () => T.tableau.members),
+      h('p.aide#aide-md', 'Markdown : **gras**, *italique*, `code`, listes « - », [lien](https://…). @ pour mentionner. Ctrl+Entrée pour enregistrer, Échap pour annuler.'),
       h('div.rangee', h('button.btn.btn-primaire', { type: 'button', onclick: () => finir(true) }, 'Enregistrer'), h('button.btn.btn-discret', { type: 'button', onclick: () => finir(false) }, 'Annuler')));
   }
   const editer = () => { M.editionDesc = { texte: M.detail.description }; rendreModal(false); };

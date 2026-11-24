@@ -46,6 +46,7 @@ const ICONES = {
   fleche: 'M5 12h14M13 6l6 6-6 6',
   menu: 'M5 12h.01M12 12h.01M19 12h.01',
   robot: 'M5 9h14v10H5zM12 5v4M9 13h.01M15 13h.01M9 16h6',
+  arobase: 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1',
 };
 export function icone(nom) {
   const s = document.createElementNS(SVG, 'svg');

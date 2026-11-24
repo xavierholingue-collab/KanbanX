@@ -1,18 +1,10 @@
 // P2 : commentaires (Markdown nettoyé, mentions), historique d'activité.
 import { agir, journal, roleSur, exigerEcriture } from './services.js';
 import { introuvable, interdit } from './erreurs.js';
-import { rendreMarkdown, extraireMentions, prenom } from './markdown.js';
+import { rendreMarkdown, prenom } from './markdown.js';
+import { membresDuTableau, resoudreMentions } from './mentions.js';
 
-async function membresDuTableau(c, boardId) {
-  return (await c.query('select u.id, u.name from board_members m join users u on u.id = m.user_id where m.board_id = $1', [boardId])).rows;
-}
 const prenoms = (membres) => new Set(membres.map((m) => prenom(m.name)));
-
-/** Identifiants des membres du tableau mentionnés (@prénom). Un nom hors du tableau n'est jamais résolu. */
-function resoudreMentions(texte, membres) {
-  const cites = extraireMentions(texte);
-  return membres.filter((m) => cites.has(prenom(m.name))).map((m) => m.id);
-}
 
 async function carteVisible(c, cardId) {
   const { rows } = await c.query('select id, board_id, title from cards where id = $1', [cardId]);
@@ -125,14 +117,31 @@ export async function activiteTableau(ctx, boardId, limite = 50, avant = null) {
 const SQL_FIL = `select m.id, m.body, m.mentions, m.created_at, m.card_id, k.title as card_title, b.id as board_id, b.name as board_name,
     m.client_name, u.id as uid, u.name, u.kind
   from comments m join users u on u.id = m.author_id join cards k on k.id = m.card_id join boards b on b.id = m.board_id`;
-const versFil = (r) => ({ id: r.id, body: r.body, createdAt: r.created_at, author: { id: r.uid, name: r.name, kind: r.kind }, client: r.client_name,
-  card: { id: r.card_id, title: r.card_title }, board: { id: r.board_id, name: r.board_name } });
+// where : endroit de la mention (commentaire, titre ou description de la carte).
+const versFil = (r) => ({ id: r.id, where: r.lieu ?? 'commentaire', body: r.body, createdAt: r.created_at, author: { id: r.uid, name: r.name, kind: r.kind },
+  client: r.client_name, card: { id: r.card_id, title: r.card_title }, board: { id: r.board_id, name: r.board_name } });
 
-/** Commentaires qui mentionnent l'utilisateur, dans les tableaux auxquels il a accès (RLS), du plus récent au plus ancien. */
+/**
+ * Mentions de l'utilisateur dans les tableaux auxquels il a accès (RLS), du plus récent au plus ancien :
+ * commentaires (comments.mentions), titres et descriptions de cartes (card_mentions, texte d'aujourd'hui).
+ * Pour une application qui agit au nom de la personne (« Claude pour Xavier »), s'y ajoutent les « @Claude »
+ * de ses tableaux. `for` dit à qui la mention s'adresse : 'claude', ou absent (la personne elle-même).
+ */
 export async function mentionsDe(ctx, limite = 20) {
+  const pourClaude = !!ctx.application;
   return agir(ctx, async (c) => (await c.query(
-    `${SQL_FIL} where $1 = any(m.mentions) and m.deleted_at is null and k.archived_at is null and b.archived_at is null order by m.created_at desc limit $2`,
-    [ctx.user.id, limite])).rows.map(versFil));
+    `select * from (
+       select 'commentaire' as lieu, case when $3 and m.mentions_claude then 'claude' end as pour, m.id, m.body, m.created_at, m.card_id, k.title as card_title, b.id as board_id, b.name as board_name,
+         m.client_name, u.id as uid, u.name, u.kind
+       from comments m join users u on u.id = m.author_id join cards k on k.id = m.card_id join boards b on b.id = m.board_id
+       where (($1 = any(m.mentions)) or ($3 and m.mentions_claude)) and m.deleted_at is null and k.archived_at is null and b.archived_at is null
+       union all
+       select x.field, case when x.user_id is null then 'claude' end, x.id, case x.field when 'titre' then k.title else k.description end, x.created_at,
+         x.card_id, k.title, b.id, b.name, x.client_name, u.id, u.name, u.kind
+       from card_mentions x join users u on u.id = x.author_id join cards k on k.id = x.card_id join boards b on b.id = x.board_id
+       where (x.user_id = $1 or ($3 and x.user_id is null)) and k.archived_at is null and b.archived_at is null
+     ) t order by created_at desc, id limit $2`,
+    [ctx.user.id, limite, pourClaude])).rows.map((r) => ({ ...versFil(r), ...(r.pour ? { for: r.pour } : {}) })));
 }
 
 /** Commentaires récents (tous les tableaux accessibles, ou un seul). */

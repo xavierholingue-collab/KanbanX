@@ -4,6 +4,7 @@ import { transaction } from './db.js';
 import { ErreurHttp, introuvable, interdit, invalide } from './erreurs.js';
 import { publier, expulser } from './evenements.js';
 import { rendreMarkdown, prenom } from './markdown.js';
+import { membresDuTableau, noterMentionsCarte } from './mentions.js';
 
 const PAS = 1024;
 
@@ -245,6 +246,7 @@ export async function creerCarte(ctx, colonneId, { title }) {
     const { rows: p } = await c.query('select coalesce(max(position), 0) + $2 as p from cards where column_id = $1', [colonneId, PAS]);
     const { rows } = await c.query('insert into cards (board_id, column_id, title, position, created_by) values ($1, $2, $3, $4, $5) returning id',
       [k.board_id, colonneId, title, p[0].p, ctx.user.id]);
+    await noterMentionsCarte(c, ctx, { boardId: k.board_id, cardId: rows[0].id, champ: 'titre', apres: title, membres: await membresDuTableau(c, k.board_id) });
     await journal(c, ctx, k.board_id, rows[0].id, 'carte.creee', { title, column: k.name });
     emit(k.board_id, { kind: 'card', id: rows[0].id });
     return versCarte((await c.query(`${SQL_CARTES} where c.id = $1`, [rows[0].id])).rows[0]);
@@ -283,6 +285,12 @@ export async function modifierCarte(ctx, id, ch) {
       await c.query('delete from card_labels where card_id = $1', [id]);
       for (const l of ch.labels) await c.query('insert into card_labels (card_id, label_id, board_id) values ($1, $2, $3)', [id, l, b.board_id]);
       champs.push('étiquettes');
+    }
+    if (champs.includes('titre') || champs.includes('description')) {
+      const membres = await membresDuTableau(c, b.board_id);
+      const commun = { boardId: b.board_id, cardId: id, membres };
+      if (champs.includes('titre')) await noterMentionsCarte(c, ctx, { ...commun, champ: 'titre', avant: b.title, apres: ch.title });
+      if (champs.includes('description')) await noterMentionsCarte(c, ctx, { ...commun, champ: 'description', avant: b.description, apres: ch.description });
     }
     if (champs.length) {
       await c.query('update cards set updated_at = now() where id = $1', [id]);
