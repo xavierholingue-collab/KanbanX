@@ -30,7 +30,14 @@ export async function roleSur(c, boardId) {
 export const exigerEcriture = (role) => { if (role === 'reader') throw interdit('Lecture seule : vous ne pouvez pas modifier ce tableau.'); };
 export const exigerProprietaire = (role) => { if (role !== 'owner') throw interdit('Réservé au propriétaire du tableau.'); };
 
-async function roleEcriture(c, boardId) { const r = await roleSur(c, boardId); exigerEcriture(r); return r; }
+/** Écriture dans un tableau : membre écrivain, et tableau non archivé. */
+export async function roleEcriture(c, boardId) {
+  const r = await roleSur(c, boardId);
+  exigerEcriture(r);
+  const { rows } = await c.query('select archived_at from boards where id = $1', [boardId]);
+  if (rows[0]?.archived_at) throw invalide('Ce tableau est archivé : son propriétaire peut le restaurer depuis l\'accueil.');
+  return r;
+}
 
 export function calculerPosition(positions, index) {
   const n = positions.length;
@@ -130,6 +137,36 @@ export async function renommerTableau(ctx, id, { name }) {
     await journal(c, ctx, id, null, 'tableau.renomme', { name });
     emit(id, { kind: 'board', id });
     return lireTableau(c, id);
+  });
+}
+
+export async function listerTableauxArchives(ctx) {
+  return agir(ctx, async (c) => (await c.query(
+    `select b.id, b.name, m.role, b.archived_at as "archivedAt" from boards b join board_members m on m.board_id = b.id and m.user_id = kx_uid()
+     where b.archived_at is not null order by b.archived_at desc`)).rows);
+}
+
+export async function archiverTableau(ctx, id, archiver = true) {
+  return agir(ctx, async (c, emit) => {
+    exigerProprietaire(await roleSur(c, id));
+    const r = await c.query(`update boards set archived_at = $2 where id = $1 and (archived_at is null) = $3`, [id, archiver ? new Date() : null, archiver]);
+    if (r.rowCount) await journal(c, ctx, id, null, archiver ? 'tableau.archive' : 'tableau.restaure', {});
+    emit(id, { kind: 'board', id });
+    return { ok: true };
+  });
+}
+
+/** Éléments archivés d'un tableau : cartes archivées (hors colonnes archivées) et colonnes archivées. */
+export async function archivesDuTableau(ctx, id) {
+  return agir(ctx, async (c) => {
+    await roleSur(c, id);
+    const cards = (await c.query(`select c.id, c.title, c.archived_at as "archivedAt", k.id as "columnId", k.name as "columnName"
+      from cards c join columns k on k.id = c.column_id
+      where c.board_id = $1 and c.archived_at is not null and k.archived_at is null order by c.archived_at desc`, [id])).rows;
+    const columns = (await c.query(`select k.id, k.name, k.archived_at as "archivedAt",
+        (select count(*)::int from cards c where c.column_id = k.id and c.archived_at is null) as "cardCount"
+      from columns k where k.board_id = $1 and k.archived_at is not null order by k.archived_at desc`, [id])).rows;
+    return { cards, columns };
   });
 }
 

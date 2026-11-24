@@ -156,3 +156,46 @@ test('point 6 : « Mon compte » permet de couper les courriels de mentions (ord
   assert.ok(m[0].texte.includes('@Eric tu peux regarder ?'));
   await px.context().close();
 });
+
+test('point 7 : vue discrète des archives avec « Restaurer » ; le propriétaire archive le tableau et le restaure depuis l\'accueil', async () => {
+  const { xavier, eric, b, col, carte } = await scene();
+  await admin.query("update cards set archived_at = now() where id = $1", [carte.id]);
+  const k2 = (await admin.query("insert into columns (board_id, name, position, archived_at) values ($1, 'Vieilles idées', 2048, now()) returning *", [b.id])).rows[0];
+  const v = [];
+  for (const [nom, opts] of [['ordinateur, clair', {}], ['téléphone, sombre', { telephone: true, sombre: true }]]) {
+    const pe = await connecter(env, eric, opts);
+    await pe.goto(`${env.base}/b/${b.id}`);
+    await pe.getByRole('heading', { name: 'À faire', exact: true }).waitFor();
+    assert.equal(await pe.getByText('Préparer la démo').count(), 0, 'pas dans le flux principal');
+    await pe.getByRole('button', { name: 'Archives' }).click();
+    const d = pe.getByRole('dialog', { name: 'Éléments archivés' });
+    await d.getByText('Préparer la démo').waitFor();
+    await d.getByText('Vieilles idées').waitFor();
+    v.push(...await auditer(pe, `archives du tableau (${nom})`));
+    assert.equal(await d.getByRole('button', { name: 'Archiver le tableau' }).count(), 0, 'réservé au propriétaire');
+    await pe.context().close();
+  }
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}`);
+  await px.getByRole('button', { name: 'Archives' }).click();
+  const d = px.getByRole('dialog', { name: 'Éléments archivés' });
+  await d.getByRole('button', { name: 'Restaurer la carte « Préparer la démo »' }).click();
+  await d.getByText('Aucune carte archivée.').waitFor();
+  await px.locator('.carte', { hasText: 'Préparer la démo' }).waitFor();
+  await d.getByRole('button', { name: 'Restaurer la colonne « Vieilles idées »' }).click();
+  await px.getByRole('heading', { name: 'Vieilles idées', exact: true }).waitFor();
+  // Archiver tout le tableau, avec confirmation.
+  await d.getByRole('button', { name: 'Archiver le tableau' }).click();
+  v.push(...await auditer(px, 'confirmation d\'archivage du tableau'));
+  await d.getByRole('button', { name: 'Oui, archiver' }).click();
+  await px.getByRole('heading', { name: 'Mes tableaux' }).waitFor();
+  await px.getByText('Tableau « Backlog » archivé.').waitFor();
+  assert.equal(await px.locator('.grille-tableaux').getByRole('link', { name: /Backlog/ }).count(), 0);
+  await px.getByText('Tableaux archivés (1)').click();
+  v.push(...await auditer(px, 'accueil avec tableaux archivés'));
+  await px.getByRole('button', { name: 'Restaurer le tableau « Backlog »' }).click();
+  await px.getByRole('heading', { name: 'À faire', exact: true }).waitFor();
+  assert.deepEqual(v, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close();
+});

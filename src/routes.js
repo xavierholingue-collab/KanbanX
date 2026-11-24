@@ -43,8 +43,14 @@ r('GET', '/api/boards', { tag: 'Tableaux', resume: 'Lister les tableaux auxquels
 r('POST', '/api/boards', { tag: 'Tableaux', resume: 'Créer un tableau (trois colonnes par défaut). Le créateur en est propriétaire.', corps: { name: nom() } }, ({ ctx, body }) => S.creerTableau(ctx, body));
 r('POST', '/api/boards/import-trello', { tag: 'Tableaux', resume: 'Importer un tableau depuis un export JSON de Trello (corps : le fichier JSON tel quel, 10 Mo au plus).', corpsLibre: true, maxCorps: 10_000_000 },
 ({ ctx, body }) => importerTrello(ctx, body));
+r('GET', '/api/boards/archived', { tag: 'Tableaux', resume: 'Lister mes tableaux archivés (restaurables par leur propriétaire).' }, ({ ctx }) => S.listerTableauxArchives(ctx));
 r('GET', '/api/boards/:id', { tag: 'Tableaux', resume: 'Lire un tableau complet : colonnes, cartes, membres, étiquettes.' }, ({ ctx, params }) => S.obtenirTableau(ctx, params.id));
 r('PATCH', '/api/boards/:id', { tag: 'Tableaux', resume: 'Renommer un tableau (propriétaire).', corps: { name: nom() } }, ({ ctx, params, body }) => S.renommerTableau(ctx, params.id, body));
+
+r('POST', '/api/boards/:id/archive', { tag: 'Tableaux', resume: 'Archiver un tableau entier (propriétaire). Il quitte l\'accueil et ne se modifie plus.' },
+({ ctx, params }) => S.archiverTableau(ctx, params.id, true));
+r('POST', '/api/boards/:id/restore', { tag: 'Tableaux', resume: 'Restaurer un tableau archivé (propriétaire).' }, ({ ctx, params }) => S.archiverTableau(ctx, params.id, false));
+r('GET', '/api/boards/:id/archives', { tag: 'Tableaux', resume: 'Cartes et colonnes archivées d\'un tableau, à restaurer.' }, ({ ctx, params }) => S.archivesDuTableau(ctx, params.id));
 
 // --- Membres ---
 r('GET', '/api/boards/:id/members', { tag: 'Membres', resume: 'Lister les membres.' }, ({ ctx, params }) => S.listerMembres(ctx, params.id));

@@ -1,5 +1,5 @@
 // P2 : commentaires (Markdown nettoyé, mentions), historique d'activité.
-import { agir, journal, roleSur, exigerEcriture } from './services.js';
+import { agir, journal, roleSur, roleEcriture } from './services.js';
 import { introuvable, interdit } from './erreurs.js';
 import { rendreMarkdown, prenom } from './markdown.js';
 import { membresDuTableau, resoudreMentions, citeClaude } from './mentions.js';
@@ -33,7 +33,7 @@ export async function listerCommentaires(ctx, cardId) {
 export async function ajouterCommentaire(ctx, cardId, { body }) {
   return agir(ctx, async (c, emit) => {
     const k = await carteVisible(c, cardId);
-    exigerEcriture(await roleSur(c, k.board_id));
+    await roleEcriture(c, k.board_id);
     const membres = await membresDuTableau(c, k.board_id);
     const mentions = resoudreMentions(body, membres);
     const { rows } = await c.query(`insert into comments (board_id, card_id, author_id, body, mentions, client_name, mentions_claude)
@@ -71,7 +71,7 @@ export async function carteComplete(ctx, cardId) {
 async function commentaireDeLAuteur(c, ctx, id) {
   const { rows } = await c.query('select id, board_id, card_id, author_id, mentions from comments where id = $1', [id]);
   if (!rows[0]) throw introuvable('Commentaire introuvable');
-  exigerEcriture(await roleSur(c, rows[0].board_id));
+  await roleEcriture(c, rows[0].board_id);
   if (rows[0].author_id !== ctx.user.id) throw interdit('Seul l\'auteur peut modifier ou supprimer son commentaire.');
   return rows[0];
 }

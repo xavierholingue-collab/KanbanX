@@ -369,3 +369,15 @@ h1[tabindex="-1"]:focus { outline: none; }
 .case-preference input[type="checkbox"] { width: 1.5rem; height: 1.5rem; margin: 0.1rem 0 0; flex: none; accent-color: var(--c-primaire); }
 .case-preference label { font-weight: 600; cursor: pointer; }
 .case-preference p { margin: var(--e-1) 0 0; }
+/* Éléments archivés (vue discrète) et tableaux archivés */
+.liste-archives { list-style: none; margin: 0 0 var(--e-4); padding: 0; display: grid; gap: var(--e-2); }
+.archive { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e-2);
+  padding: var(--e-2) var(--e-3); background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-m); }
+.archive-texte { min-width: 0; flex: 1 1 12rem; }
+.archive-texte p { margin: 0; overflow-wrap: anywhere; }
+.archive .btn { min-height: var(--cible); }
+.archives-tableau { margin-top: var(--e-5); padding-top: var(--e-4); border-top: 1px solid var(--c-bordure); }
+.archives-tableau .rangee { flex-wrap: wrap; }
+.tableaux-archives { margin-top: var(--e-5); }
+.tableaux-archives summary { cursor: pointer; padding: var(--e-2) 0; min-height: var(--cible); font-weight: 600; color: var(--c-texte-doux); }
+.tableaux-archives .liste-archives { margin-top: var(--e-2); max-width: 44rem; }

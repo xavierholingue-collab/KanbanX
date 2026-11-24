@@ -7,6 +7,7 @@ import { installerRaccourcis } from './raccourcis.js';
 import { ecranConsentement, ecranDemandeInvalide, ecranApplications } from './applications.js';
 import { ecranMentions } from './mentions.js';
 import { ecranCompte } from './compte.js';
+import { horodatage } from './activite.js';
 
 export const etat = { moi: undefined, ecran: null }; // moi : undefined = inconnu, null = non connecté
 
@@ -228,6 +229,26 @@ async function accueil() {
     tuileNouveau,
   );
   if (!tableaux.length) page.insertBefore(h('p.vide', 'Vous n\'avez encore aucun tableau. Créez le premier !'), liste);
+  await tableauxArchives(page);
+}
+
+/** « Tableaux archivés » : repliés par défaut, restaurables par leur propriétaire. */
+async function tableauxArchives(page) {
+  let archives = [];
+  try { archives = await get('/api/boards/archived'); } catch (e) { return erreur(e.message); }
+  if (!archives.length) return;
+  const liste = h('ul.liste-archives');
+  const details = h('details.tableaux-archives', h('summary', `Tableaux archivés (${archives.length})`), liste);
+  liste.append(...archives.map((t) => h('li.archive',
+    h('div.archive-texte', h('p', h('strong', t.name)), h('p.aide', 'Archivé ', horodatage(t.archivedAt), ` · ${ROLES[t.role]}`)),
+    t.role === 'owner'
+      ? h('button.btn.btn-secondaire', { type: 'button', 'aria-label': `Restaurer le tableau « ${t.name} »`, onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { await post(`/api/boards/${t.id}/restore`); toast(`Tableau « ${t.name} » restauré.`); naviguer(`/b/${t.id}`); }
+        catch (err) { e.currentTarget.disabled = false; erreur(`Restauration impossible : ${err.message}`); }
+      } }, 'Restaurer')
+      : h('span.aide', 'Seul son propriétaire peut le restaurer.'))));
+  page.append(details);
 }
 
 installerRaccourcis();
