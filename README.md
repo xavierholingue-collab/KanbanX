@@ -61,7 +61,7 @@ claude mcp add --transport http kanbanx http://localhost:3000/mcp \
   --header "Authorization: Bearer kbx_…"
 ```
 
-Outils exposés : `lister_tableaux`, `lire_tableau`, `creer_carte`,
+Outils exposés : `lister_tableaux`, `lire_tableau`, `lire_carte`, `creer_carte`,
 `modifier_carte`, `deplacer_carte`, `ajouter_commentaire`,
 `lire_commentaires_recents`, `lire_mentions`. Chaque action est signée
 « Claude » (via MCP) dans l'historique.

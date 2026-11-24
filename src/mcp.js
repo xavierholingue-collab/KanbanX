@@ -22,7 +22,7 @@ const OUTILS = [
   },
   {
     name: 'lire_tableau', title: 'Lire un tableau',
-    description: 'Lit un tableau complet : colonnes (dans l\'ordre), cartes (titre, échéance, responsables, étiquettes, nombre de commentaires), membres et étiquettes. Utilise les identifiants renvoyés pour les autres outils.',
+    description: 'Lit un tableau complet : colonnes (dans l\'ordre), cartes (titre, échéance, responsables, étiquettes, nombre de commentaires), membres et étiquettes. La description et les commentaires d\'une carte se lisent avec lire_carte. Utilise les identifiants renvoyés pour les autres outils.',
     schema: { tableau_id: id('Identifiant du tableau') }, lecture: true,
     run: async (ctx, a) => {
       const t = await S.obtenirTableau(ctx, a.tableau_id);
@@ -40,6 +40,31 @@ const OUTILS = [
     texte: (r) => [`Tableau « ${r.nom} » (ton rôle : ${r.role})`, `Membres : ${r.membres.map((m) => `${m.nom} [${m.role}]`).join(', ')}`,
       ...r.colonnes.flatMap((k) => [`\n## ${k.nom} (colonne ${k.id})${k.limite_wip ? ` — limite ${k.limite_wip}` : ''}`,
         ...(k.cartes.length ? k.cartes.map((c) => `- ${c.titre} (carte ${c.id})${c.echeance ? `, échéance ${c.echeance}` : ''}${c.responsables.length ? `, responsables : ${c.responsables.join(', ')}` : ''}${c.etiquettes.length ? `, étiquettes : ${c.etiquettes.join(', ')}` : ''}${c.commentaires ? `, ${c.commentaires} commentaire(s)` : ''}`) : ['(vide)'])])].join('\n'),
+  },
+  {
+    name: 'lire_carte', title: 'Lire une carte',
+    description: 'Lit une carte en entier : tableau, colonne, titre, description (Markdown), échéance, responsables, étiquettes et tous ses commentaires (auteur, date, texte), du plus ancien au plus récent.',
+    schema: { carte_id: id('Identifiant de la carte') }, lecture: true,
+    run: async (ctx, a) => {
+      const k = await D.carteComplete(ctx, a.carte_id);
+      return {
+        id: k.id, tableau: { id: k.board.id, nom: k.board.name }, colonne: { id: k.column.id, nom: k.column.name },
+        titre: k.title, description: k.description, echeance: k.dueDate, archivee: k.archived || k.column.archived,
+        responsables: k.assignees.map((u) => ({ id: u.id, nom: u.name })),
+        etiquettes: k.labels.map((l) => ({ id: l.id, nom: l.name, couleur: l.color })),
+        commentaires: k.comments.map((m) => ({ id: m.id, auteur: signature(m), date: m.createdAt, modifie: m.editedAt, texte: m.body })),
+      };
+    },
+    texte: (r) => [
+      `# ${r.titre} (carte ${r.id})${r.archivee ? ' — archivée' : ''}`,
+      `Tableau « ${r.tableau.nom} » (${r.tableau.id}), colonne « ${r.colonne.nom} » (${r.colonne.id})`,
+      `Échéance : ${r.echeance ?? 'aucune'}`,
+      `Responsables : ${r.responsables.map((u) => u.nom).join(', ') || 'aucun'}`,
+      `Étiquettes : ${r.etiquettes.map((l) => l.nom || l.couleur).join(', ') || 'aucune'}`,
+      '', '## Description', r.description || '(vide)',
+      '', `## Commentaires (${r.commentaires.length})`,
+      ...(r.commentaires.length ? r.commentaires.map((m) => `- ${m.auteur}, ${new Date(m.date).toISOString()} :\n  ${m.texte.replaceAll('\n', '\n  ')}`) : ['(aucun)']),
+    ].join('\n'),
   },
   {
     name: 'creer_carte', title: 'Créer une carte',
@@ -92,6 +117,9 @@ const OUTILS = [
     run: async (ctx, a) => ({ mentions: (await D.mentionsDe(ctx, a.limite ?? 20)).map(versFil) }),
   },
 ];
+/** « Claude pour Xavier » quand une application a écrit au nom de la personne, sinon son nom. */
+const signature = (m) => (m.client ? `${m.client} pour ${m.author.name}` : m.author.name);
+
 function versFil(m) {
   return { id: m.id, texte: m.body, auteur: m.author.name, date: m.createdAt, carte: { id: m.card.id, titre: m.card.title }, tableau: { id: m.board.id, nom: m.board.name } };
 }

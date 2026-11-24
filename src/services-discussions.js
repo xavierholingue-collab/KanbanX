@@ -50,6 +50,29 @@ export async function ajouterCommentaire(ctx, cardId, { body }) {
   });
 }
 
+/** Carte en entier, pour un agent : tableau, colonne, champs, responsables, étiquettes et fil de commentaires (sans HTML). */
+export async function carteComplete(ctx, cardId) {
+  return agir(ctx, async (c) => {
+    const k = await carteVisible(c, cardId);
+    await roleSur(c, k.board_id);
+    const r = (await c.query(`select c.id, c.title, c.description, to_char(c.due_date, 'YYYY-MM-DD') as due_date, c.archived_at,
+        b.id as board_id, b.name as board_name, k.id as column_id, k.name as column_name, k.archived_at as column_archived_at
+      from cards c join boards b on b.id = c.board_id join columns k on k.id = c.column_id where c.id = $1`, [cardId])).rows[0];
+    const responsables = (await c.query(`select u.id, u.name from card_assignees a join users u on u.id = a.user_id
+      where a.card_id = $1 order by lower(u.name)`, [cardId])).rows;
+    const etiquettes = (await c.query(`select l.id, l.name, l.color from card_labels x join labels l on l.id = x.label_id
+      where x.card_id = $1 order by l.created_at`, [cardId])).rows;
+    const commentaires = (await c.query(`${SQL_COMM} where m.card_id = $1 and m.deleted_at is null order by m.created_at, m.id`, [cardId])).rows;
+    return {
+      id: r.id, title: r.title, description: r.description, dueDate: r.due_date, archived: !!r.archived_at,
+      board: { id: r.board_id, name: r.board_name }, column: { id: r.column_id, name: r.column_name, archived: !!r.column_archived_at },
+      assignees: responsables, labels: etiquettes,
+      comments: commentaires.map((m) => ({ id: m.id, body: m.body, createdAt: m.created_at, editedAt: m.edited_at,
+        author: { id: m.uid, name: m.name, kind: m.kind }, client: m.client_name })),
+    };
+  });
+}
+
 async function commentaireDeLAuteur(c, ctx, id) {
   const { rows } = await c.query('select id, board_id, card_id, author_id from comments where id = $1', [id]);
   if (!rows[0]) throw introuvable('Commentaire introuvable');
