@@ -20,7 +20,7 @@ export async function ecranMentions(conteneur) {
   etat.replaceChildren(mentions.length ? '' : h('p.vide', 'Personne ne vous a encore mentionné.'));
   liste.replaceChildren(...mentions.map((m) => {
     const qui = m.client ? `${m.client} pour ${m.author.name}` : m.author.name;
-    return h('li.mention', avatar(m.author),
+    return h('li.mention-item', avatar(m.author),
       h('div.mention-texte',
         h('p', h('strong', qui), ` vous a mentionné dans ${ENDROIT[m.where] ?? ENDROIT.commentaire} `,
           h('a', { href: `/b/${m.board.id}/c/${m.card.id}` }, m.card.title)),

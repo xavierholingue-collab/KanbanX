@@ -50,7 +50,7 @@ test('point 2 : suggestions @ dans la description et le titre ; Eric retrouve se
   const pe = await connecter(env, eric);
   await pe.getByRole('link', { name: 'Mes mentions' }).click();
   await pe.getByRole('heading', { name: 'Mes mentions' }).waitFor();
-  const items = pe.locator('.mention');
+  const items = pe.locator('.mention-item');
   await items.nth(1).waitFor();
   const textes = await items.evaluateAll((els) => els.map((e) => e.querySelector('p').textContent));
   assert.deepEqual(textes, ['Xavier vous a mentionné dans le titre de Préparer la démo avec @Eric',
@@ -82,7 +82,7 @@ test('point 2 : « Mes mentions » sur téléphone, en sombre, et suggestions da
   await px.getByRole('link', { name: 'Appeler @Eric demain' }).waitFor();
   const pe = await connecter(env, eric, { telephone: true, sombre: true });
   await pe.goto(`${env.base}/mentions`);
-  await pe.locator('.mention', { hasText: 'dans le titre de' }).waitFor();
+  await pe.locator('.mention-item', { hasText: 'dans le titre de' }).waitFor();
   v.push(...await auditer(pe, 'mes mentions (téléphone, sombre)'));
   assert.deepEqual(v, []);
   const largeur = await pe.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
