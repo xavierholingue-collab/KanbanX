@@ -189,7 +189,10 @@ test('point 7 : vue discrète des archives avec « Restaurer » ; le propriétai
   v.push(...await auditer(px, 'confirmation d\'archivage du tableau'));
   await d.getByRole('button', { name: 'Oui, archiver' }).click();
   await px.getByRole('heading', { name: 'Mes tableaux' }).waitFor();
-  await px.getByText('Tableau « Backlog » archivé.').waitFor();
+  // exact : le même texte est aussi annoncé aux lecteurs d'écran (zone #annonces), avec « Bouton Annuler disponible ».
+  await px.getByText('Tableau « Backlog » archivé.', { exact: true }).waitFor();
+  // L'annonce arrive un instant après le message : on l'attend, sans double point.
+  await px.waitForFunction(() => document.getElementById('annonces')?.textContent === 'Tableau « Backlog » archivé. Bouton Annuler disponible.', null, { timeout: 5000 });
   assert.equal(await px.locator('.grille-tableaux').getByRole('link', { name: /Backlog/ }).count(), 0);
   await px.getByText('Tableaux archivés (1)').click();
   v.push(...await auditer(px, 'accueil avec tableaux archivés'));

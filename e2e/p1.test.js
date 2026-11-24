@@ -181,7 +181,7 @@ test('droit à l\'erreur : archiver une carte puis Annuler', async () => {
   await tableauAvecCartes(page, 'Annulation', ['À garder']);
   await page.getByRole('link', { name: 'À garder' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Archiver' }).click();
-  await page.getByText('Carte « À garder » archivée.').waitFor();
+  await page.getByText('Carte « À garder » archivée.', { exact: true }).waitFor();
   assert.equal(await page.locator('.carte-lien').count(), 0);
   await page.getByRole('button', { name: 'Annuler', exact: true }).click();
   await page.getByRole('link', { name: 'À garder' }).waitFor();

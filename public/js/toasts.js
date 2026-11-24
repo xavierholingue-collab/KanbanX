@@ -12,7 +12,8 @@ export function toast(texte, { annuler, erreur = false, duree } = {}) {
   }
   t.append(h('button.btn.btn-icone', { type: 'button', 'aria-label': 'Fermer le message', onclick: fermer }, '✕'));
   zone().append(t);
-  if (!erreur) annoncer(annuler ? `${texte}. Bouton Annuler disponible.` : texte);
+  // Pas de double ponctuation (« archivé.. Bouton ») : la plupart des messages finissent déjà par un point.
+  if (!erreur) annoncer(annuler ? `${texte}${/[.!?…]$/.test(texte) ? '' : '.'} Bouton Annuler disponible.` : texte);
   const minuteur = setTimeout(fermer, duree ?? (annuler ? 7000 : erreur ? 8000 : 4000));
   return fermer;
 }
