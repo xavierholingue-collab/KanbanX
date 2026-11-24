@@ -5,6 +5,10 @@ import { erreur, toast } from './toasts.js';
 import { ecranTableau, synchroniserCarte, quitterTableau } from './tableau.js';
 import { installerRaccourcis } from './raccourcis.js';
 import { ecranConsentement, ecranDemandeInvalide, ecranApplications } from './applications.js';
+import { ecranMentions } from './mentions.js';
+import { ecranCompte } from './compte.js';
+import { horodatage } from './activite.js';
+import { importerFichier } from './import.js';
 
 export const etat = { moi: undefined, ecran: null }; // moi : undefined = inconnu, null = non connecté
 
@@ -47,7 +51,8 @@ function entete() {
   el.replaceChildren(...[
     h('a.marque', { href: etat.moi ? '/' : '/connexion' }, logo(), 'KanbanX'),
     h('span.espace'),
-    etat.moi && h('span.utilisateur', etat.moi.name),
+    etat.moi && h('a.btn.lien-compte', { href: '/compte', title: 'Mon compte' }, icone('utilisateur'), h('span.texte-entete', etat.moi.name)),
+    etat.moi && h('a.btn.btn-icone', { href: '/mentions', 'aria-label': 'Mes mentions', title: 'Mes mentions' }, icone('arobase')),
     etat.moi && h('a.btn.btn-icone', { href: '/applications', 'aria-label': 'Applications connectées', title: 'Applications connectées' }, icone('robot')),
     etat.moi && h('button.btn.btn-icone', { type: 'button', 'aria-label': 'Raccourcis clavier (?)', title: 'Raccourcis clavier (?)', onclick: () => window.dispatchEvent(new CustomEvent('kx:aide')) }, icone('aide')),
     etat.moi && h('button.btn', { type: 'button', onclick: deconnexion }, icone('sortie'), h('span.texte-entete', 'Se déconnecter')),
@@ -90,6 +95,8 @@ async function rendre() {
     return connexion();
   }
   if (chemin === '/connexion') { history.replaceState(null, '', '/'); return accueil(); }
+  if (chemin === '/compte') { quitterTableau(); etat.ecran = { type: 'compte' }; return ecranCompte(contenu()); }
+  if (chemin === '/mentions') { quitterTableau(); etat.ecran = { type: 'mentions' }; return ecranMentions(contenu()); }
   if (chemin === '/applications') { quitterTableau(); etat.ecran = { type: 'applications' }; return ecranApplications(contenu()); }
   if (m) {
     if (etat.ecran?.type === 'tableau' && etat.ecran.id === m[1]) return synchroniserCarte(m[2] ?? null);
@@ -208,21 +215,37 @@ async function accueil() {
     if (f.size > 10_000_000) return erreur('Fichier trop volumineux (10 Mo au plus).');
     let data;
     try { data = JSON.parse(await f.text()); } catch { return erreur('Ce fichier n\'est pas un export JSON de Trello valide.'); }
-    try {
-      const r = await post('/api/boards/import-trello', data);
-      const pl = (n, m) => `${n} ${m}${n > 1 ? 's' : ''}`;
-      toast(`Tableau « ${r.name} » importé : ${pl(r.colonnes, 'colonne')}, ${pl(r.cartes, 'carte')}, ${pl(r.commentaires, 'commentaire')}.`);
-      naviguer(`/b/${r.id}`);
-    } catch (err) { erreur(`Import impossible : ${err.message}`); }
+    e.target.value = ''; // le même fichier peut être choisi de nouveau
+    await importerFichier(data);
   } });
   page.append(h('div.rangee.import', fichier,
     h('label.btn.btn-secondaire', { for: 'fichier-trello' }, icone('archive'), 'Importer un tableau Trello (JSON)'),
-    h('span.aide', 'Listes, cartes, étiquettes, échéances et commentaires sont repris.')));
+    h('span.aide', 'Listes, cartes, étiquettes, échéances et commentaires sont repris ; vous pourrez associer leurs auteurs.')));
   liste.replaceChildren(
     ...tableaux.map((t) => h('li', h('a.tuile', { href: `/b/${t.id}` }, h('span', t.name, h('span.tuile-role', ROLES[t.role]))))),
     tuileNouveau,
   );
   if (!tableaux.length) page.insertBefore(h('p.vide', 'Vous n\'avez encore aucun tableau. Créez le premier !'), liste);
+  await tableauxArchives(page);
+}
+
+/** « Tableaux archivés » : repliés par défaut, restaurables par leur propriétaire. */
+async function tableauxArchives(page) {
+  let archives = [];
+  try { archives = await get('/api/boards/archived'); } catch (e) { return erreur(e.message); }
+  if (!archives.length) return;
+  const liste = h('ul.liste-archives');
+  const details = h('details.tableaux-archives', h('summary', `Tableaux archivés (${archives.length})`), liste);
+  liste.append(...archives.map((t) => h('li.archive',
+    h('div.archive-texte', h('p', h('strong', t.name)), h('p.aide', 'Archivé ', horodatage(t.archivedAt), ` · ${ROLES[t.role]}`)),
+    t.role === 'owner'
+      ? h('button.btn.btn-secondaire', { type: 'button', 'aria-label': `Restaurer le tableau « ${t.name} »`, onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { await post(`/api/boards/${t.id}/restore`); toast(`Tableau « ${t.name} » restauré.`); naviguer(`/b/${t.id}`); }
+        catch (err) { e.currentTarget.disabled = false; erreur(`Restauration impossible : ${err.message}`); }
+      } }, 'Restaurer')
+      : h('span.aide', 'Seul son propriétaire peut le restaurer.'))));
+  page.append(details);
 }
 
 installerRaccourcis();

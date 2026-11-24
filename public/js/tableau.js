@@ -7,7 +7,9 @@ import { activerGlisser, glisserAuClavier } from './dnd.js';
 import { ouvrirCarte, fermerCarte, carteOuverte, rafraichirCarte } from './carte.js';
 import { ouvrirMembres } from './membres.js';
 import { ouvrirActivite } from './activite.js';
+import { ouvrirArchives } from './archives.js';
 import { naviguer } from './app.js';
+import { avecMentions } from './saisie-mentions.js';
 
 export const T = {
   tableau: null, moi: null, racine: null,
@@ -194,6 +196,7 @@ function rendreBarre() {
     h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'membres', onclick: () => ouvrirMembres(T) },
       h('span.avatars', t.members.slice(0, 4).map(avatar)), h('span', 'Membres'), h('span.visuellement-cache', ` du tableau (${t.members.length})`)),
     h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'activite', onclick: () => ouvrirActivite(T) }, icone('activite'), 'Activité'),
+    h('button.btn.btn-secondaire', { type: 'button', 'data-cle': 'archives', onclick: () => ouvrirArchives(T) }, icone('archive'), 'Archives'),
     h('div.filtres', { role: 'search', 'aria-label': 'Filtrer les cartes' },
       h('div.recherche', icone('recherche'), recherche),
       h('select.champ', { 'aria-label': 'Filtrer par membre', 'data-cle': 'f-membre', onchange: (e) => { f.membre = e.target.value; appliquerFiltres(); rendreBarre(); } },
@@ -359,7 +362,7 @@ function composeur(k) {
     }, 150);
   });
   return h('form.composeur', { onsubmit: (e) => { e.preventDefault(); valider(); } },
-    champ,
+    avecMentions(champ, () => T.tableau.members),
     h('div.rangee', h('button.btn.btn-primaire', { type: 'submit' }, 'Ajouter une carte'),
       h('button.btn.btn-icone.btn-discret', { type: 'button', 'aria-label': 'Annuler l\'ajout', onclick: fermer }, icone('x'))));
 }
@@ -412,7 +415,7 @@ function champEdition(etatE, enregistrer, libelle, max) {
 
 function rendreCarte(c, k) {
   if (T.ui.edition?.type === 'carte' && T.ui.edition.id === c.id) {
-    return h('li.carte', { dataset: { cardId: c.id } }, champEdition(T.ui.edition, (v) => renommerCarte(c.id, v), 'Titre de la carte', 300));
+    return h('li.carte', { dataset: { cardId: c.id } }, avecMentions(champEdition(T.ui.edition, (v) => renommerCarte(c.id, v), 'Titre de la carte', 300), () => T.tableau.members));
   }
   const ech = etatEcheance(c.dueDate);
   const etiqs = c.labels.map(etiquette).filter(Boolean);

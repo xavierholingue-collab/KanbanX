@@ -4,6 +4,7 @@ import { transaction } from './db.js';
 import { ErreurHttp, introuvable, interdit, invalide } from './erreurs.js';
 import { publier, expulser } from './evenements.js';
 import { rendreMarkdown, prenom } from './markdown.js';
+import { membresDuTableau, noterMentionsCarte } from './mentions.js';
 
 const PAS = 1024;
 
@@ -29,7 +30,14 @@ export async function roleSur(c, boardId) {
 export const exigerEcriture = (role) => { if (role === 'reader') throw interdit('Lecture seule : vous ne pouvez pas modifier ce tableau.'); };
 export const exigerProprietaire = (role) => { if (role !== 'owner') throw interdit('Réservé au propriétaire du tableau.'); };
 
-async function roleEcriture(c, boardId) { const r = await roleSur(c, boardId); exigerEcriture(r); return r; }
+/** Écriture dans un tableau : membre écrivain, et tableau non archivé. */
+export async function roleEcriture(c, boardId) {
+  const r = await roleSur(c, boardId);
+  exigerEcriture(r);
+  const { rows } = await c.query('select archived_at from boards where id = $1', [boardId]);
+  if (rows[0]?.archived_at) throw invalide('Ce tableau est archivé : son propriétaire peut le restaurer depuis l\'accueil.');
+  return r;
+}
 
 export function calculerPosition(positions, index) {
   const n = positions.length;
@@ -55,6 +63,23 @@ async function positionCarte(c, colonneId, index, sauf) {
     rows = await lire();
   }
   return calculerPosition(rows.map((r) => r.position), index);
+}
+
+// ---------- Préférences de la personne ----------
+
+export async function lirePreferences(ctx) {
+  return agir(ctx, async (c) => {
+    const { rows } = await c.query('select mention_emails, email from users where id = kx_uid()');
+    return { email: rows[0]?.email, mentionEmails: rows[0]?.mention_emails ?? false };
+  });
+}
+
+export async function changerPreferences(ctx, { mentionEmails }) {
+  return agir(ctx, async (c) => {
+    await c.query('update users set mention_emails = $1 where id = kx_uid()', [mentionEmails]);
+    const { rows } = await c.query('select mention_emails from users where id = kx_uid()');
+    return { mentionEmails: rows[0].mention_emails };
+  });
 }
 
 // ---------- Tableaux ----------
@@ -113,6 +138,41 @@ export async function renommerTableau(ctx, id, { name }) {
     emit(id, { kind: 'board', id });
     return lireTableau(c, id);
   });
+}
+
+export async function listerTableauxArchives(ctx) {
+  return agir(ctx, async (c) => (await c.query(
+    `select b.id, b.name, m.role, b.archived_at as "archivedAt" from boards b join board_members m on m.board_id = b.id and m.user_id = kx_uid()
+     where b.archived_at is not null order by b.archived_at desc`)).rows);
+}
+
+export async function archiverTableau(ctx, id, archiver = true) {
+  return agir(ctx, async (c, emit) => {
+    exigerProprietaire(await roleSur(c, id));
+    const r = await c.query(`update boards set archived_at = $2 where id = $1 and (archived_at is null) = $3`, [id, archiver ? new Date() : null, archiver]);
+    if (r.rowCount) await journal(c, ctx, id, null, archiver ? 'tableau.archive' : 'tableau.restaure', {});
+    emit(id, { kind: 'board', id });
+    return { ok: true };
+  });
+}
+
+/** Éléments archivés d'un tableau : cartes archivées (hors colonnes archivées) et colonnes archivées. */
+export async function archivesDuTableau(ctx, id) {
+  return agir(ctx, async (c) => {
+    await roleSur(c, id);
+    const cards = (await c.query(`select c.id, c.title, c.archived_at as "archivedAt", k.id as "columnId", k.name as "columnName"
+      from cards c join columns k on k.id = c.column_id
+      where c.board_id = $1 and c.archived_at is not null and k.archived_at is null order by c.archived_at desc`, [id])).rows;
+    const columns = (await c.query(`select k.id, k.name, k.archived_at as "archivedAt",
+        (select count(*)::int from cards c where c.column_id = k.id and c.archived_at is null) as "cardCount"
+      from columns k where k.board_id = $1 and k.archived_at is not null order by k.archived_at desc`, [id])).rows;
+    return { cards, columns };
+  });
+}
+
+/** Personnes (pas les agents) qui partagent déjà un tableau avec moi, moi compris : la RLS de users n'en montre pas d'autres. */
+export async function personnesPourImport(ctx) {
+  return agir(ctx, async (c) => (await c.query("select id, name, email from users where kind = 'human' and kx_shares_board(id) order by lower(name), email")).rows);
 }
 
 // ---------- Membres ----------
@@ -181,11 +241,15 @@ async function lireColonne(c, id) {
 }
 const versColonne = (k) => ({ id: k.id, name: k.name, wipLimit: k.wip_limit, position: k.position });
 
-export async function creerColonne(ctx, boardId, { name }) {
+/** Crée une colonne à la fin, ou à l'index donné (0 = première) parmi les colonnes non archivées. */
+export async function creerColonne(ctx, boardId, { name, index }) {
   return agir(ctx, async (c, emit) => {
     await roleEcriture(c, boardId);
-    const { rows: p } = await c.query('select coalesce(max(position), 0) + $2 as p from columns where board_id = $1', [boardId, PAS]);
-    const k = (await c.query('insert into columns (board_id, name, position) values ($1, $2, $3) returning *', [boardId, name, p[0].p])).rows[0];
+    let position;
+    if (index === undefined || index === null) {
+      position = (await c.query('select coalesce(max(position), 0) + $2 as p from columns where board_id = $1', [boardId, PAS])).rows[0].p;
+    } else position = await positionColonne(c, boardId, index);
+    const k = (await c.query('insert into columns (board_id, name, position) values ($1, $2, $3) returning *', [boardId, name, position])).rows[0];
     await journal(c, ctx, boardId, null, 'colonne.creee', { name });
     emit(boardId, { kind: 'column', id: k.id });
     return versColonne(k);
@@ -245,6 +309,7 @@ export async function creerCarte(ctx, colonneId, { title }) {
     const { rows: p } = await c.query('select coalesce(max(position), 0) + $2 as p from cards where column_id = $1', [colonneId, PAS]);
     const { rows } = await c.query('insert into cards (board_id, column_id, title, position, created_by) values ($1, $2, $3, $4, $5) returning id',
       [k.board_id, colonneId, title, p[0].p, ctx.user.id]);
+    await noterMentionsCarte(c, ctx, { boardId: k.board_id, cardId: rows[0].id, champ: 'titre', apres: title, membres: await membresDuTableau(c, k.board_id) });
     await journal(c, ctx, k.board_id, rows[0].id, 'carte.creee', { title, column: k.name });
     emit(k.board_id, { kind: 'card', id: rows[0].id });
     return versCarte((await c.query(`${SQL_CARTES} where c.id = $1`, [rows[0].id])).rows[0]);
@@ -253,7 +318,7 @@ export async function creerCarte(ctx, colonneId, { title }) {
 
 async function prenomsMembres(c, boardId) {
   const { rows } = await c.query('select u.name from board_members m join users u on u.id = m.user_id where m.board_id = $1', [boardId]);
-  return new Set(rows.map((r) => prenom(r.name)));
+  return new Set(['claude', ...rows.map((r) => prenom(r.name))]); // « @Claude » est toujours une mention
 }
 
 export async function obtenirCarte(ctx, id) {
@@ -283,6 +348,12 @@ export async function modifierCarte(ctx, id, ch) {
       await c.query('delete from card_labels where card_id = $1', [id]);
       for (const l of ch.labels) await c.query('insert into card_labels (card_id, label_id, board_id) values ($1, $2, $3)', [id, l, b.board_id]);
       champs.push('étiquettes');
+    }
+    if (champs.includes('titre') || champs.includes('description')) {
+      const membres = await membresDuTableau(c, b.board_id);
+      const commun = { boardId: b.board_id, cardId: id, membres };
+      if (champs.includes('titre')) await noterMentionsCarte(c, ctx, { ...commun, champ: 'titre', avant: b.title, apres: ch.title });
+      if (champs.includes('description')) await noterMentionsCarte(c, ctx, { ...commun, champ: 'description', avant: b.description, apres: ch.description });
     }
     if (champs.length) {
       await c.query('update cards set updated_at = now() where id = $1', [id]);

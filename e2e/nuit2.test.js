@@ -1,0 +1,283 @@
+// Nuit 2 : parcours navigateur des écrans nouveaux, avec audit d'accessibilité axe (clair, sombre, téléphone).
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { environnement, connecter, creerUtilisateur, admin, auditer } from './aide.js';
+
+let env;
+before(async () => { env = await environnement(); });
+after(async () => { await env.fermer(); });
+
+/** Tableau « Backlog » de Xavier, avec Eric membre et une carte « Préparer la démo ». */
+async function scene() {
+  const xavier = await creerUtilisateur('Xavier');
+  const eric = await creerUtilisateur('Eric');
+  const b = (await admin.query("insert into boards (name, created_by) values ('Backlog', $1) returning *", [xavier.id])).rows[0];
+  await admin.query("insert into board_members (board_id, user_id, role) values ($1, $2, 'owner'), ($1, $3, 'member')", [b.id, xavier.id, eric.id]);
+  const col = (await admin.query("insert into columns (board_id, name, position) values ($1, 'À faire', 1024) returning *", [b.id])).rows[0];
+  const carte = (await admin.query("insert into cards (board_id, column_id, title, position, created_by) values ($1, $2, 'Préparer la démo', 1024, $3) returning *",
+    [b.id, col.id, xavier.id])).rows[0];
+  return { xavier, eric, b, col, carte };
+}
+
+test('point 2 : suggestions @ dans la description et le titre ; Eric retrouve ses mentions avec l\'endroit', async () => {
+  const { xavier, eric, b, carte } = await scene();
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}/c/${carte.id}`);
+  const dialog = px.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Ajouter une description plus détaillée…' }).click();
+  const desc = dialog.getByRole('combobox', { name: 'Description (Markdown)' });
+  await desc.focus();
+  await px.keyboard.type('Merci @er');
+  await dialog.getByRole('listbox', { name: 'Membres à mentionner' }).getByRole('option', { name: /Eric/ }).waitFor();
+  await px.keyboard.press('Enter'); // choisit la suggestion, n'enregistre pas
+  await px.keyboard.type('pour le budget.');
+  assert.equal(await desc.inputValue(), 'Merci @Eric pour le budget.');
+  await px.keyboard.press('Control+Enter');
+  await dialog.locator('.markdown .mention', { hasText: '@Eric' }).waitFor();
+
+  // Titre : la suggestion s'ouvre aussi ; Entrée choisit, une seconde Entrée enregistre.
+  await dialog.getByRole('button', { name: 'Préparer la démo' }).click();
+  const titre = dialog.getByRole('combobox', { name: 'Titre de la carte' });
+  await titre.press('End');
+  await px.keyboard.type(' avec @E');
+  await dialog.getByRole('listbox', { name: 'Membres à mentionner' }).waitFor();
+  await px.keyboard.press('Enter');
+  assert.equal(await titre.inputValue(), 'Préparer la démo avec @Eric ');
+  await px.keyboard.press('Enter');
+  await dialog.getByRole('button', { name: 'Préparer la démo avec @Eric' }).waitFor();
+
+  // Eric : écran « Mes mentions » depuis l'en-tête.
+  const pe = await connecter(env, eric);
+  await pe.getByRole('link', { name: 'Mes mentions' }).click();
+  await pe.getByRole('heading', { name: 'Mes mentions' }).waitFor();
+  const items = pe.locator('.mention-item');
+  await items.nth(1).waitFor();
+  const textes = await items.evaluateAll((els) => els.map((e) => e.querySelector('p').textContent));
+  assert.deepEqual(textes, ['Xavier vous a mentionné dans le titre de Préparer la démo avec @Eric',
+    'Xavier vous a mentionné dans la description de Préparer la démo avec @Eric']);
+  assert.equal(await items.nth(1).locator('blockquote').textContent(), 'Merci @Eric pour le budget.');
+  const v = await auditer(pe, 'mes mentions (clair)');
+  await pe.emulateMedia({ colorScheme: 'dark' });
+  v.push(...await auditer(pe, 'mes mentions (sombre)'));
+  assert.deepEqual(v, []);
+  // Le lien ouvre la carte.
+  await items.nth(1).getByRole('link').click();
+  await pe.getByRole('dialog').getByText('Merci').waitFor();
+  assert.deepEqual(pe.erreurs, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close(); await pe.context().close();
+});
+
+test('point 2 : « Mes mentions » sur téléphone, en sombre, et suggestions dans l\'ajout de carte', async () => {
+  const { xavier, eric, b } = await scene();
+  const px = await connecter(env, xavier, { telephone: true, sombre: true });
+  await px.goto(`${env.base}/b/${b.id}`);
+  await px.getByRole('button', { name: 'Ajouter une carte' }).first().click();
+  await px.keyboard.type('Appeler @Er');
+  await px.getByRole('listbox', { name: 'Membres à mentionner' }).waitFor();
+  const v = await auditer(px, 'ajout de carte avec suggestions (téléphone, sombre)');
+  await px.keyboard.press('Enter');
+  await px.keyboard.type('demain');
+  await px.keyboard.press('Enter');
+  await px.getByRole('link', { name: 'Appeler @Eric demain' }).waitFor();
+  const pe = await connecter(env, eric, { telephone: true, sombre: true });
+  await pe.goto(`${env.base}/mentions`);
+  await pe.locator('.mention-item', { hasText: 'dans le titre de' }).waitFor();
+  v.push(...await auditer(pe, 'mes mentions (téléphone, sombre)'));
+  assert.deepEqual(v, []);
+  const largeur = await pe.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  assert.equal(largeur, true, 'pas de défilement horizontal');
+  await px.context().close(); await pe.context().close();
+});
+
+test('point 3 : « @Claude » est proposé dans les suggestions même sans compte Claude membre, et mis en évidence', async () => {
+  const { xavier, b, carte } = await scene();
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}/c/${carte.id}`);
+  const champ = px.getByRole('combobox', { name: 'Nouveau commentaire' });
+  await champ.click();
+  await px.keyboard.type('@cl');
+  await px.getByRole('option', { name: /Claude — le Claude de chaque membre/ }).waitFor();
+  const v = await auditer(px, 'suggestion @Claude');
+  await px.keyboard.press('Enter');
+  await px.keyboard.type('résume la carte');
+  await px.keyboard.press('Control+Enter');
+  await px.locator('.commentaire .bulle .mention', { hasText: '@Claude' }).waitFor();
+  assert.deepEqual(v, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close();
+});
+
+test('point 5 : /mcp ouverte dans un onglet affiche la page d\'explication (clair, sombre, téléphone)', async () => {
+  const v = [];
+  for (const [nom, opts] of [['ordinateur, clair', { viewport: { width: 1366, height: 820 } }], ['téléphone, sombre', { ...(await import('playwright')).devices['Pixel 7'], colorScheme: 'dark' }]]) {
+    const ctx = await env.navigateur.newContext({ locale: 'fr-FR', ...opts });
+    const page = await ctx.newPage();
+    const erreurs = [];
+    page.on('console', (m) => { if (m.type() === 'error') erreurs.push(m.text()); });
+    const r = await page.goto(`${env.base}/mcp`);
+    assert.equal(r.status(), 200);
+    await page.getByRole('heading', { name: 'Serveur MCP de KanbanX' }).waitFor();
+    await page.getByText('Collez-la dans Claude : Paramètres › Connecteurs › Ajouter un connecteur personnalisé.').waitFor();
+    v.push(...await auditer(page, `/mcp (${nom})`));
+    assert.deepEqual(erreurs, [], 'aucune ressource bloquée par la CSP');
+    await ctx.close();
+  }
+  assert.deepEqual(v, []);
+});
+
+test('point 6 : « Mon compte » permet de couper les courriels de mentions (ordinateur clair, téléphone sombre)', async () => {
+  const { boiteMentions } = await import('../src/courriel.js');
+  const { traiterFileMentions } = await import('../src/notifications.js');
+  const { xavier, eric, b, carte } = await scene();
+  const v = [];
+  for (const [nom, opts] of [['ordinateur, clair', {}], ['téléphone, sombre', { telephone: true, sombre: true }]]) {
+    const pe = await connecter(env, eric, opts);
+    await pe.locator('a[href="/compte"]').click();
+    await pe.getByRole('heading', { name: 'Mon compte' }).waitFor();
+    const caseMentions = pe.getByRole('checkbox', { name: 'Me prévenir par courriel quand on me mentionne' });
+    assert.equal(await caseMentions.isChecked(), nom.startsWith('ordinateur'));
+    v.push(...await auditer(pe, `mon compte (${nom})`));
+    await caseMentions.click();
+    await pe.getByText(/ne recevrez plus de courriel|serez prévenu par courriel/).waitFor();
+    assert.deepEqual(pe.erreurs, []);
+    await pe.context().close();
+  }
+  assert.deepEqual(v, []);
+  // Eric a coupé puis rétabli : la mention de Xavier lui arrive.
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}/c/${carte.id}`);
+  await px.getByRole('combobox', { name: 'Nouveau commentaire' }).fill('@Eric tu peux regarder ?');
+  await px.keyboard.press('Control+Enter');
+  await px.locator('.commentaire', { hasText: 'tu peux regarder' }).locator('.mention').waitFor();
+  await traiterFileMentions();
+  const m = boiteMentions.filter((x) => x.a === eric.email);
+  assert.equal(m.length, 1);
+  assert.ok(m[0].texte.includes('@Eric tu peux regarder ?'));
+  await px.context().close();
+});
+
+test('point 7 : vue discrète des archives avec « Restaurer » ; le propriétaire archive le tableau et le restaure depuis l\'accueil', async () => {
+  const { xavier, eric, b, col, carte } = await scene();
+  await admin.query("update cards set archived_at = now() where id = $1", [carte.id]);
+  const k2 = (await admin.query("insert into columns (board_id, name, position, archived_at) values ($1, 'Vieilles idées', 2048, now()) returning *", [b.id])).rows[0];
+  const v = [];
+  for (const [nom, opts] of [['ordinateur, clair', {}], ['téléphone, sombre', { telephone: true, sombre: true }]]) {
+    const pe = await connecter(env, eric, opts);
+    await pe.goto(`${env.base}/b/${b.id}`);
+    await pe.getByRole('heading', { name: 'À faire', exact: true }).waitFor();
+    assert.equal(await pe.getByText('Préparer la démo').count(), 0, 'pas dans le flux principal');
+    await pe.getByRole('button', { name: 'Archives' }).click();
+    const d = pe.getByRole('dialog', { name: 'Éléments archivés' });
+    await d.getByText('Préparer la démo').waitFor();
+    await d.getByText('Vieilles idées').waitFor();
+    v.push(...await auditer(pe, `archives du tableau (${nom})`));
+    assert.equal(await d.getByRole('button', { name: 'Archiver le tableau' }).count(), 0, 'réservé au propriétaire');
+    await pe.context().close();
+  }
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}`);
+  await px.getByRole('button', { name: 'Archives' }).click();
+  const d = px.getByRole('dialog', { name: 'Éléments archivés' });
+  await d.getByRole('button', { name: 'Restaurer la carte « Préparer la démo »' }).click();
+  await d.getByText('Aucune carte archivée.').waitFor();
+  await px.locator('.carte', { hasText: 'Préparer la démo' }).waitFor();
+  await d.getByRole('button', { name: 'Restaurer la colonne « Vieilles idées »' }).click();
+  await px.getByRole('heading', { name: 'Vieilles idées', exact: true }).waitFor();
+  // Archiver tout le tableau, avec confirmation.
+  await d.getByRole('button', { name: 'Archiver le tableau' }).click();
+  v.push(...await auditer(px, 'confirmation d\'archivage du tableau'));
+  await d.getByRole('button', { name: 'Oui, archiver' }).click();
+  await px.getByRole('heading', { name: 'Mes tableaux' }).waitFor();
+  // exact : le même texte est aussi annoncé aux lecteurs d'écran (zone #annonces), avec « Bouton Annuler disponible ».
+  await px.getByText('Tableau « Backlog » archivé.', { exact: true }).waitFor();
+  // L'annonce arrive un instant après le message : on l'attend, sans double point.
+  await px.waitForFunction(() => document.getElementById('annonces')?.textContent === 'Tableau « Backlog » archivé. Bouton Annuler disponible.', null, { timeout: 5000 });
+  assert.equal(await px.locator('.grille-tableaux').getByRole('link', { name: /Backlog/ }).count(), 0);
+  await px.getByText('Tableaux archivés (1)').click();
+  v.push(...await auditer(px, 'accueil avec tableaux archivés'));
+  await px.getByRole('button', { name: 'Restaurer le tableau « Backlog »' }).click();
+  await px.getByRole('heading', { name: 'À faire', exact: true }).waitFor();
+  assert.deepEqual(v, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close();
+});
+
+test('point 8 : à l\'import, associer un auteur Trello à une personne qui partage un tableau ; le commentaire l\'affiche', async () => {
+  const { xavier, eric } = await scene();
+  const exportTrello = {
+    name: 'Chantier importé', members: [{ id: 'm-eric', fullName: 'Eric Hoarau' }, { id: 'm-marie', fullName: 'Marie Exemple' }],
+    lists: [{ id: 'L1', name: 'À faire', pos: 1 }], cards: [{ id: 'c1', name: 'Devis', idList: 'L1', pos: 1 }], labels: [],
+    actions: [
+      { type: 'commentCard', date: '2026-10-01T09:00:00.000Z', idMemberCreator: 'm-eric', memberCreator: { id: 'm-eric', fullName: 'Eric Hoarau' }, data: { text: 'Je relance le fournisseur.', card: { id: 'c1' } } },
+      { type: 'commentCard', date: '2026-10-02T09:00:00.000Z', idMemberCreator: 'm-marie', memberCreator: { id: 'm-marie', fullName: 'Marie Exemple' }, data: { text: 'Vu.', card: { id: 'c1' } } },
+    ],
+  };
+  const v = [];
+  const px = await connecter(env, xavier);
+  await px.locator('#fichier-trello').setInputFiles({ name: 'trello.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exportTrello)) });
+  const d = px.getByRole('dialog', { name: 'Auteurs des commentaires Trello' });
+  await d.waitFor();
+  const selEric = d.getByLabel('Eric Hoarau');
+  assert.equal(await selEric.inputValue(), eric.id, 'proposé d\'après le prénom');
+  assert.equal(await d.getByLabel('Marie Exemple').inputValue(), '', 'aucune personne de ce nom : pas d\'association proposée');
+  const options = await selEric.locator('option').allTextContents();
+  assert.ok(!options.some((o) => o.includes('alexis')), 'seulement les personnes qui partagent un tableau');
+  v.push(...await auditer(px, 'association des auteurs Trello'));
+  await d.getByRole('button', { name: 'Importer le tableau' }).click();
+  await px.getByRole('link', { name: 'Devis' }).click();
+  const comm = px.locator('.commentaire', { hasText: 'Je relance le fournisseur.' });
+  await comm.waitFor();
+  assert.equal(await comm.locator('.auteur strong').textContent(), 'Eric');
+  await comm.getByText('importé de Trello').waitFor();
+  await px.locator('.commentaire', { hasText: 'Marie Exemple sur Trello' }).waitFor();
+  v.push(...await auditer(px, 'commentaires importés'));
+  assert.deepEqual(v, []);
+  assert.deepEqual(px.erreurs, []);
+  await px.context().close();
+});
+
+test('point 9 : import avec clé et jeton, image rapatriée affichée ; sans clé, encart « image restée sur Trello »', async () => {
+  const http = await import('node:http');
+  const { reglages } = await import('../src/telechargement.js');
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  const faux = http.createServer((q, r) => {
+    if (q.headers.authorization !== 'OAuth oauth_consumer_key="cle-fictive-1234", oauth_token="jeton-fictif-5678"') { r.writeHead(401); return r.end(); }
+    r.writeHead(200, { 'Content-Type': 'text/html' }); r.end(PNG);
+  });
+  await new Promise((r) => faux.listen(0, '127.0.0.1', r));
+  const avant = { ...reglages };
+  Object.assign(reglages, { protocoles: ['http:'], resoudre: async () => ({ address: '127.0.0.1', family: 4 }), adresseAutorisee: (ip) => ip === '127.0.0.1' });
+  const pj = `http://trello.com:${faux.address().port}/1/cards/c1/attachments/a1/download/maquette.png`;
+  const exp = (nom) => ({ name: nom, lists: [{ id: 'L1', name: 'À faire', pos: 1 }], labels: [], actions: [],
+    cards: [{ id: 'c1', name: 'Maquette', idList: 'L1', pos: 1, desc: 'La maquette :', attachments: [{ id: 'a1', name: 'maquette.png', url: pj, isUpload: true, mimeType: 'image/png' }] }] });
+  try {
+    const xavier = await creerUtilisateur('Xavier');
+    const v = [];
+    for (const [nom, opts, avecCle] of [['ordinateur, clair', {}, true], ['téléphone, sombre', { telephone: true, sombre: true }, false]]) {
+      const px = await connecter(env, xavier, opts);
+      await px.locator('#fichier-trello').setInputFiles({ name: 't.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exp(`Images ${nom}`))) });
+      const d = px.getByRole('dialog', { name: 'Importer le tableau Trello' });
+      await d.getByRole('heading', { name: 'Images (1)' }).waitFor();
+      v.push(...await auditer(px, `import avec images (${nom})`));
+      if (avecCle) {
+        await d.getByLabel('Clé d\'API Trello (facultative)').fill('cle-fictive-1234');
+        await d.getByLabel('Jeton Trello (facultatif)').fill('jeton-fictif-5678');
+      }
+      await d.getByRole('button', { name: 'Importer le tableau' }).click();
+      await px.getByRole('link', { name: 'Maquette' }).click();
+      const dialog = px.getByRole('dialog', { name: 'Maquette' });
+      if (avecCle) {
+        const img = dialog.locator('.markdown img[alt="maquette.png"]');
+        await img.waitFor();
+        await px.waitForFunction(() => document.querySelector('.markdown img')?.naturalWidth === 1);
+      } else {
+        await dialog.locator('.markdown blockquote', { hasText: 'Image restée sur Trello' }).waitFor();
+      }
+      v.push(...await auditer(px, `carte importée (${nom})`));
+      assert.deepEqual(px.erreurs, []);
+      await px.context().close();
+    }
+    assert.deepEqual(v, []);
+  } finally { Object.assign(reglages, avant); faux.close(); }
+});

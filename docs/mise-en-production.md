@@ -77,6 +77,35 @@ Les serveurs de Claude viennent de la plage `160.79.104.0/21` : elle ne doit pas
 on ajoute dans Claude un connecteur personnalisé d'adresse `https://kanbanx.y-factor.fr/mcp`, puis on se
 connecte et on donne son accord. La page « Applications connectées » de KanbanX permet de retirer un accès.
 
+## 5 bis. Courriels de mentions
+
+Aucune variable nouvelle : les courriels de mentions partent par le même `SMTP_URL` et le même `SMTP_FROM` que
+le lien de connexion, avec les mêmes en-têtes. Une mention ajoute une ligne à la file `mention_emails` ; une
+boucle du processus web l'envoie (un tour toutes les 30 secondes), au plus un courriel toutes les 10 minutes
+par personne. La file est en base : elle survit à un redémarrage. Un échec d'envoi est réessayé (1, 2, 4…
+minutes, au plus une heure, abandon après 10 essais) et journalisé sans adresse ni contenu. Les lignes
+envoyées ou abandonnées sont purgées au bout de 7 jours. Chaque personne peut couper ces courriels dans
+« Mon compte ». Le message contient un lien vers `BASE_URL/compte` pour le faire.
+
+## 5 ter. Images rapatriées de Trello
+
+À l'import d'un export Trello, la personne peut saisir sa clé et son jeton d'API Trello : les images jointes aux
+cartes sont alors téléchargées et stockées **dans la base** (table `images`, colonne `bytea`), pas sur le disque.
+La clé et le jeton ne servent qu'à cette requête : ils ne sont ni stockés ni journalisés.
+
+- **Accès sortant nouveau** : le serveur doit pouvoir joindre en HTTPS (443) `trello.com`, `api.trello.com` et
+  `trello-attachments.s3.amazonaws.com`, et seulement ces hôtes (liste fermée dans le code, redirections
+  comprises ; aucune adresse interne n'est jamais contactée). Sans cet accès, les images restent des liens.
+- **Taille de la base** : 5 Mo au plus par image, 200 images et 100 Mo au plus par import. Un import d'un
+  tableau riche en captures peut donc ajouter jusqu'à 100 Mo ; en pratique, une capture d'écran pèse de 100 à
+  500 Ko, soit 20 à 100 Mo pour 200 images. Les images sont supprimées avec leur tableau (et jamais avant).
+  La sauvegarde de la base grossit d'autant : à surveiller avec `select pg_size_pretty(sum(taille)) from images;`.
+- **Durée de l'import** : 10 secondes au plus par image et 90 secondes au plus pour l'ensemble des
+  téléchargements, faits avant l'écriture en base. Le proxy inverse doit laisser à `POST /api/boards/import-trello`
+  au moins 120 secondes de délai de réponse.
+- **Diffusion** : `GET /api/images/:id`, avec contrôle d'accès, type fixé par le serveur (PNG, JPEG, GIF, WebP
+  reconnus par leur signature, jamais de SVG), `nosniff`, `Content-Disposition: inline` et CSP `sandbox`.
+
 ## 6. Ordre d'une livraison
 
 1. Sauvegarde de la base.

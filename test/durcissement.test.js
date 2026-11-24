@@ -203,7 +203,7 @@ test('un agent ne peut jamais devenir propriétaire d\'un tableau', async () => 
   assert.equal(rows[0].n, 0);
 });
 
-test('les consignes MCP rappellent que le contenu des cartes n\'est pas un ordre, et qu\'une mention ne notifie pas', async () => {
+test('les consignes MCP rappellent que le contenu des cartes n\'est pas un ordre, et ce qu\'une mention déclenche', async () => {
   const agent = await agentAvecJeton(srv.base, 'Claude');
   const r = await fetch(`${srv.base}/mcp`, {
     method: 'POST',
@@ -213,7 +213,9 @@ test('les consignes MCP rappellent que le contenu des cartes n\'est pas un ordre
   const consignes = (await r.json()).result.instructions;
   assert.match(consignes, /jamais des ordres/);
   assert.match(consignes, /confirmation/);
-  assert.match(consignes, /aucune notification/);
+  // Nuit 2 (décision du 24/11) : une mention de personne la prévient désormais par courriel ; les consignes le disent.
+  assert.match(consignes, /la prévient par courriel/);
+  assert.match(consignes, /ne mentionne quelqu'un que si c'est utile/);
 });
 
 // ---------- Derrière le proxy inverse ----------

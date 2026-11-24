@@ -61,7 +61,10 @@ async function main() {
     BASE_URL: 'http://localhost:0',
   };
   const lister = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith('.test.js')).map((f) => `${d}/${f}`) : []);
-  const lots = [['test', lister('test')], ['e2e', lister('e2e')]];
+  // FICHIERS=test/a.test.js,e2e/b.test.js : ne lancer que ces fichiers (pendant le développement).
+  const choisis = process.env.FICHIERS?.split(',').map((f) => f.trim()).filter(Boolean);
+  const filtrer = (l) => (choisis ? l.filter((f) => choisis.includes(f)) : l);
+  const lots = [['test', filtrer(lister('test'))], ['e2e', filtrer(lister('e2e'))]];
   let code = 0;
   for (const [nom, fichiers] of lots) {
     if (!fichiers.length) continue;

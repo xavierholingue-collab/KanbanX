@@ -1,4 +1,6 @@
 // Parcours de bout en bout : vrai serveur (en processus) sur la base de test, vrai navigateur Chromium.
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { chromium, devices } from 'playwright';
 import { creerServeur } from '../src/serveur.js';
 import { boiteDev } from '../src/courriel.js';
@@ -40,3 +42,11 @@ export async function connecter(env, utilisateur, { telephone = false, sombre = 
 }
 
 export { creerUtilisateur, admin };
+
+/** Audit WCAG 2.2 AA (axe-core) de la page telle qu'elle est ; renvoie la liste des violations, vide si tout va bien. */
+const AXE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
+export async function auditer(page, contexte) {
+  await page.evaluate(AXE); // injection par le protocole de débogage : n'est pas soumise à la CSP de la page
+  const r = await page.evaluate(() => window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] }));
+  return r.violations.map((v) => `${contexte} — ${v.id} : ${v.help} (${v.nodes.length}) ${v.nodes.slice(0, 2).map((n) => n.target.join(' ')).join(' | ')}`);
+}

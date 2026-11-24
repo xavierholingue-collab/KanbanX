@@ -54,7 +54,7 @@ test('initialize, notifications et liste des outils', async () => {
   assert.equal(init.data.result.serverInfo.name, 'kanbanx');
   assert.equal((await mcp(claude, 'notifications/initialized', undefined, { id: null })).status, 202);
   const outils = (await mcp(claude, 'tools/list', {})).data.result.tools.map((t) => t.name).sort();
-  assert.deepEqual(outils, ['ajouter_commentaire', 'creer_carte', 'deplacer_carte', 'lire_commentaires_recents', 'lire_mentions', 'lire_tableau', 'lister_tableaux', 'modifier_carte']);
+  assert.deepEqual(outils, ['ajouter_commentaire', 'creer_carte', 'creer_colonne', 'deplacer_carte', 'deplacer_colonne', 'lire_carte', 'lire_commentaires_recents', 'lire_mentions', 'lire_tableau', 'lister_tableaux', 'modifier_carte', 'renommer_colonne']);
   assert.equal((await mcp(claude, 'methode/inconnue', {})).data.error.code, -32601);
   const get = await fetch(`${srv.base}/mcp`, { headers: { Authorization: `Bearer ${claude.bearer}` } });
   assert.equal(get.status, 405);
