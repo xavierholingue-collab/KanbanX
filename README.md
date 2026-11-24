@@ -6,6 +6,7 @@ participe comme un membre à part entière.
 - Ce qu'on construit : [docs/cahier-des-charges.md](docs/cahier-des-charges.md)
 - Règles pour les agents : [CLAUDE.md](CLAUDE.md)
 - Bilan de la première nuit : [RAPPORT-NUIT-1.md](RAPPORT-NUIT-1.md)
+- Bilan de la deuxième nuit : [RAPPORT-NUIT-2.md](RAPPORT-NUIT-2.md)
 - Durcissement avant mise en production : [RAPPORT-DURCISSEMENT.md](RAPPORT-DURCISSEMENT.md)
 - Ce que la production exige (variables, commandes, route de santé, OAuth) : [docs/mise-en-production.md](docs/mise-en-production.md)
 - Brancher Claude depuis claude.ai (OAuth 2.1) : [RAPPORT-OAUTH.md](RAPPORT-OAUTH.md)
@@ -44,7 +45,8 @@ npm test
 Une seule commande : elle lance un PostgreSQL 18 jetable (conteneur Docker en
 mémoire), applique les migrations, exécute les tests (`node:test`) puis les
 parcours dans un vrai navigateur (Playwright, Chromium). Variables utiles :
-`SANS_NAVIGATEUR=1` (sans Playwright), `SEULEMENT=test` ou `SEULEMENT=e2e`.
+`SANS_NAVIGATEUR=1` (sans Playwright), `SEULEMENT=test` ou `SEULEMENT=e2e`,
+`FICHIERS=test/a.test.js,e2e/b.test.js` (seulement ces fichiers).
 Première installation de Chromium : `npx playwright install --with-deps chromium`.
 
 ## API REST et serveur MCP
