@@ -107,3 +107,21 @@ test('point 3 : « @Claude » est proposé dans les suggestions même sans compt
   assert.deepEqual(px.erreurs, []);
   await px.context().close();
 });
+
+test('point 5 : /mcp ouverte dans un onglet affiche la page d\'explication (clair, sombre, téléphone)', async () => {
+  const v = [];
+  for (const [nom, opts] of [['ordinateur, clair', { viewport: { width: 1366, height: 820 } }], ['téléphone, sombre', { ...(await import('playwright')).devices['Pixel 7'], colorScheme: 'dark' }]]) {
+    const ctx = await env.navigateur.newContext({ locale: 'fr-FR', ...opts });
+    const page = await ctx.newPage();
+    const erreurs = [];
+    page.on('console', (m) => { if (m.type() === 'error') erreurs.push(m.text()); });
+    const r = await page.goto(`${env.base}/mcp`);
+    assert.equal(r.status(), 200);
+    await page.getByRole('heading', { name: 'Serveur MCP de KanbanX' }).waitFor();
+    await page.getByText('Collez-la dans Claude : Paramètres › Connecteurs › Ajouter un connecteur personnalisé.').waitFor();
+    v.push(...await auditer(page, `/mcp (${nom})`));
+    assert.deepEqual(erreurs, [], 'aucune ressource bloquée par la CSP');
+    await ctx.close();
+  }
+  assert.deepEqual(v, []);
+});

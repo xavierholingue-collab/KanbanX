@@ -7,6 +7,8 @@ import * as S from './services.js';
 import * as D from './services-discussions.js';
 import { valider, versJsonSchema } from './validation.js';
 import { ErreurHttp } from './erreurs.js';
+import { echapper } from './markdown.js';
+import { config } from './config.js';
 
 const VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const VERSION_DEFAUT = '2025-06-18';
@@ -177,7 +179,48 @@ async function appelerOutil(ctx, params) {
   }
 }
 
+/** La requête accepte-t-elle text/html (q > 0) ? Les clients MCP demandent JSON ou text/event-stream, jamais HTML. */
+function accepteHtml(req) {
+  return String(req.headers.accept ?? '').split(',').some((m) => {
+    const [type, ...params] = m.trim().toLowerCase().split(';').map((x) => x.trim());
+    const q = params.find((x) => x.startsWith('q='));
+    return type === 'text/html' && (!q || Number(q.slice(2)) > 0);
+  });
+}
+
+/** Adresse ouverte dans un onglet : une courte page explique quoi en faire (CSP de l'application, ni script ni style en ligne). */
+function pageNavigateur(res) {
+  const adresse = echapper(`${config.baseUrl}/mcp`);
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', Vary: 'Accept' });
+  res.end(`<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Serveur MCP — KanbanX</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/jetons.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="entete"><a class="marque" href="/"><img class="marque-logo" src="/favicon.svg" alt="">KanbanX</a></header>
+  <main id="contenu" class="page">
+    <section class="boite" aria-labelledby="titre-mcp">
+      <h1 id="titre-mcp">Serveur MCP de KanbanX</h1>
+      <p>Ceci est l'adresse du serveur MCP de KanbanX. Collez-la dans Claude : Paramètres › Connecteurs › Ajouter un connecteur personnalisé.</p>
+      <p><code class="adresse-mcp">${adresse}</code></p>
+      <p class="aide">Claude vous demandera ensuite de vous connecter à KanbanX et d'autoriser l'accès. Vous pourrez le retirer à tout moment depuis « Applications connectées ».</p>
+      <p><a class="btn btn-primaire" href="/">Ouvrir KanbanX</a></p>
+    </section>
+  </main>
+</body>
+</html>
+`);
+}
+
 export async function traiterMcp(req, res, { limiter, memeOrigine }) {
+  if (req.method === 'GET' && accepteHtml(req)) return pageNavigateur(res);
   if (!memeOrigine(req)) return reponse(res, 403, erreurRpc(null, -32000, 'Origine refusée.'));
   if (req.method !== 'POST') return reponse(res, 405, erreurRpc(null, -32000, 'Méthode non autorisée : utilisez POST.'), { Allow: 'POST' });
   const v = req.headers['mcp-protocol-version'];
