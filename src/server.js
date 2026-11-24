@@ -2,6 +2,7 @@ import { config } from './config.js';
 import { creerServeur } from './serveur.js';
 import { pool } from './db.js';
 import { verifierConfigProduction, verifierRoleApplicatif } from './demarrage.js';
+import { demarrerBoucleMentions } from './notifications.js';
 
 function refuser(problemes) {
   console.error(`Démarrage refusé :\n- ${problemes.join('\n- ')}`);
@@ -27,5 +28,6 @@ if (config.env === 'production') {
 }
 
 const s = creerServeur();
+demarrerBoucleMentions(); // courriels de mentions : file en base, envoi en arrière-plan
 s.listen(config.port, config.host, () => console.log(`KanbanX écoute sur ${config.host}:${config.port} (adresse publique : ${config.baseUrl})`));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { s.close(); s.closeAllConnections(); process.exit(0); });

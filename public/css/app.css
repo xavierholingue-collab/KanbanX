@@ -363,3 +363,9 @@ h1[tabindex="-1"]:focus { outline: none; }
 .mention-extrait { margin: var(--e-1) 0; padding-left: var(--e-2); border-left: 3px solid var(--c-accent, var(--c-bordure)); overflow-wrap: anywhere; }
 /* Suggestions @ dans les champs de titre et de description */
 .popover-mentions { width: 100%; min-width: 0; flex: 1; }
+/* Mon compte */
+.case-preference { display: flex; align-items: flex-start; gap: var(--e-3); padding: var(--e-3) var(--e-4);
+  background: var(--c-surface); border: 1px solid var(--c-bordure); border-radius: var(--rayon-m); }
+.case-preference input[type="checkbox"] { width: 1.5rem; height: 1.5rem; margin: 0.1rem 0 0; flex: none; accent-color: var(--c-primaire); }
+.case-preference label { font-weight: 600; cursor: pointer; }
+.case-preference p { margin: var(--e-1) 0 0; }

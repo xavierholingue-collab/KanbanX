@@ -31,8 +31,12 @@ async ({ body, ip, entetes }) => {
 r('POST', '/api/auth/deconnexion', { auth: 'session', tag: 'Authentification', resume: 'Fermer la session.' },
 async ({ req, entetes }) => { await fermerSession(req); entetes['Set-Cookie'] = cookieSession('', 0); return { ok: true }; });
 
-r('GET', '/api/me', { auth: 'tout', tag: 'Authentification', resume: 'Utilisateur courant (et jeton CSRF si session).' },
-async ({ ctx }) => ({ user: ctx.user, csrf: ctx.csrf ?? null }));
+r('GET', '/api/me', { auth: 'tout', tag: 'Authentification', resume: 'Utilisateur courant, ses préférences (et jeton CSRF si session).' },
+async ({ ctx }) => ({ user: { ...ctx.user, ...(await S.lirePreferences(ctx)) }, csrf: ctx.csrf ?? null }));
+
+r('PATCH', '/api/me/preferences', { auth: 'session', tag: 'Authentification', resume: 'Changer ses préférences : courriel quand on me mentionne.',
+  corps: { mentionEmails: { type: 'boolean', required: true, description: 'Recevoir un courriel (regroupé, au plus un toutes les 10 minutes) quand on me mentionne.' } } },
+({ ctx, body }) => S.changerPreferences(ctx, body));
 
 // --- Tableaux ---
 r('GET', '/api/boards', { tag: 'Tableaux', resume: 'Lister les tableaux auxquels on est invité.' }, ({ ctx }) => S.listerTableaux(ctx));

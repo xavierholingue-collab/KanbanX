@@ -5,6 +5,18 @@ import { randomBytes } from 'node:crypto';
 import { config } from './config.js';
 
 export const boiteDev = []; // utile aux tests : derniers messages « envoyés »
+export const boiteMentions = []; // idem pour les courriels de mentions (sans SMTP)
+
+/** Courriel de mentions : par SMTP si configuré, sinon dans la boîte de développement (et la console hors tests). */
+export async function envoyerMentions(message) {
+  if (!config.smtpUrl) {
+    boiteMentions.push(message);
+    if (boiteMentions.length > 200) boiteMentions.shift();
+    if (config.env !== 'test') console.log(`\n  ✉  Courriel pour ${message.a} : ${message.sujet}\n${message.texte.replace(/^/gm, '     ')}\n`);
+    return;
+  }
+  await smtp(message);
+}
 
 export async function envoyerLien(email, lien) {
   const message = { a: email, sujet: 'Votre lien de connexion KanbanX', texte: `Bonjour,\n\nPour vous connecter à KanbanX, ouvrez ce lien (valable 15 minutes, usage unique) :\n\n${lien}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n` };

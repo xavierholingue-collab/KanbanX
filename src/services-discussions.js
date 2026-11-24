@@ -3,6 +3,7 @@ import { agir, journal, roleSur, exigerEcriture } from './services.js';
 import { introuvable, interdit } from './erreurs.js';
 import { rendreMarkdown, prenom } from './markdown.js';
 import { membresDuTableau, resoudreMentions, citeClaude } from './mentions.js';
+import { mettreEnFile } from './notifications.js';
 
 // « @Claude » est toujours une mention (point 3) : elle est mise en évidence comme celles des membres.
 const prenoms = (membres) => new Set(['claude', ...membres.map((m) => prenom(m.name))]);
@@ -37,6 +38,7 @@ export async function ajouterCommentaire(ctx, cardId, { body }) {
     const mentions = resoudreMentions(body, membres);
     const { rows } = await c.query(`insert into comments (board_id, card_id, author_id, body, mentions, client_name, mentions_claude)
       values ($1, $2, $3, $4, $5, $6, $7) returning id`, [k.board_id, cardId, ctx.user.id, body, mentions, ctx.application ?? null, citeClaude(body, ctx)]);
+    await mettreEnFile(c, ctx, { boardId: k.board_id, cardId, lieu: 'commentaire', texte: body, destinataires: mentions, membres });
     await journal(c, ctx, k.board_id, cardId, 'commentaire.ajoute', { title: k.title, commentId: rows[0].id, mentions });
     emit(k.board_id, { kind: 'comment', id: rows[0].id, cardId });
     return versComm((await c.query(`${SQL_COMM} where m.id = $1`, [rows[0].id])).rows[0], prenoms(membres));
@@ -67,7 +69,7 @@ export async function carteComplete(ctx, cardId) {
 }
 
 async function commentaireDeLAuteur(c, ctx, id) {
-  const { rows } = await c.query('select id, board_id, card_id, author_id from comments where id = $1', [id]);
+  const { rows } = await c.query('select id, board_id, card_id, author_id, mentions from comments where id = $1', [id]);
   if (!rows[0]) throw introuvable('Commentaire introuvable');
   exigerEcriture(await roleSur(c, rows[0].board_id));
   if (rows[0].author_id !== ctx.user.id) throw interdit('Seul l\'auteur peut modifier ou supprimer son commentaire.');
@@ -78,8 +80,12 @@ export async function modifierCommentaire(ctx, id, { body }) {
   return agir(ctx, async (c, emit) => {
     const m = await commentaireDeLAuteur(c, ctx, id);
     const membres = await membresDuTableau(c, m.board_id);
+    const mentions = resoudreMentions(body, membres);
     await c.query('update comments set body = $2, mentions = $3, mentions_claude = $4, edited_at = now() where id = $1',
-      [id, body, resoudreMentions(body, membres), citeClaude(body, ctx)]);
+      [id, body, mentions, citeClaude(body, ctx)]);
+    // Seules les personnes nouvellement citées sont prévenues.
+    const deja = new Set(m.mentions);
+    await mettreEnFile(c, ctx, { boardId: m.board_id, cardId: m.card_id, lieu: 'commentaire', texte: body, destinataires: mentions.filter((u) => !deja.has(u)), membres });
     await journal(c, ctx, m.board_id, m.card_id, 'commentaire.modifie', { commentId: id });
     emit(m.board_id, { kind: 'comment', id, cardId: m.card_id });
     return versComm((await c.query(`${SQL_COMM} where m.id = $1`, [id])).rows[0], prenoms(membres));

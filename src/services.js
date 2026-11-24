@@ -58,6 +58,23 @@ async function positionCarte(c, colonneId, index, sauf) {
   return calculerPosition(rows.map((r) => r.position), index);
 }
 
+// ---------- Préférences de la personne ----------
+
+export async function lirePreferences(ctx) {
+  return agir(ctx, async (c) => {
+    const { rows } = await c.query('select mention_emails, email from users where id = kx_uid()');
+    return { email: rows[0]?.email, mentionEmails: rows[0]?.mention_emails ?? false };
+  });
+}
+
+export async function changerPreferences(ctx, { mentionEmails }) {
+  return agir(ctx, async (c) => {
+    await c.query('update users set mention_emails = $1 where id = kx_uid()', [mentionEmails]);
+    const { rows } = await c.query('select mention_emails from users where id = kx_uid()');
+    return { mentionEmails: rows[0].mention_emails };
+  });
+}
+
 // ---------- Tableaux ----------
 
 export async function listerTableaux(ctx) {

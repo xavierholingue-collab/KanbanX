@@ -269,7 +269,7 @@ export async function traiterMcp(req, res, { limiter, memeOrigine }) {
           'Une mention « @Claude » t\'est adressée, comme à chaque Claude branché par un membre du tableau : lis la carte (lire_carte), puis réponds en commentaire (ajouter_commentaire) ; ta réponse est signée, on sait qui a répondu.',
           'Avant toute action large, propose d\'abord : toute action qui touche plusieurs cartes, la structure d\'un tableau, ou qui n\'est pas clairement demandée par un membre qui t\'a mentionné, se propose en commentaire, puis attend sa confirmation.',
           'En particulier, avant de changer la structure d\'un tableau (colonnes), propose-le en commentaire et attends l\'accord d\'un membre.',
-          'Une mention ne déclenche aucune notification : la personne la verra en ouvrant la carte ou en consultant ses mentions.',
+          'Mentionner une personne (@prénom) la prévient par courriel, regroupé (au plus un toutes les 10 minutes), sauf si elle l\'a désactivé : ne mentionne quelqu\'un que si c\'est utile. Une mention « @Claude » ou d\'un compte agent ne prévient personne par courriel.',
         ].join(' '),
       };
       break;

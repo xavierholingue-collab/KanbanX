@@ -6,6 +6,7 @@ import { ecranTableau, synchroniserCarte, quitterTableau } from './tableau.js';
 import { installerRaccourcis } from './raccourcis.js';
 import { ecranConsentement, ecranDemandeInvalide, ecranApplications } from './applications.js';
 import { ecranMentions } from './mentions.js';
+import { ecranCompte } from './compte.js';
 
 export const etat = { moi: undefined, ecran: null }; // moi : undefined = inconnu, null = non connecté
 
@@ -48,7 +49,7 @@ function entete() {
   el.replaceChildren(...[
     h('a.marque', { href: etat.moi ? '/' : '/connexion' }, logo(), 'KanbanX'),
     h('span.espace'),
-    etat.moi && h('span.utilisateur', etat.moi.name),
+    etat.moi && h('a.btn.lien-compte', { href: '/compte', title: 'Mon compte' }, icone('utilisateur'), h('span.texte-entete', etat.moi.name)),
     etat.moi && h('a.btn.btn-icone', { href: '/mentions', 'aria-label': 'Mes mentions', title: 'Mes mentions' }, icone('arobase')),
     etat.moi && h('a.btn.btn-icone', { href: '/applications', 'aria-label': 'Applications connectées', title: 'Applications connectées' }, icone('robot')),
     etat.moi && h('button.btn.btn-icone', { type: 'button', 'aria-label': 'Raccourcis clavier (?)', title: 'Raccourcis clavier (?)', onclick: () => window.dispatchEvent(new CustomEvent('kx:aide')) }, icone('aide')),
@@ -92,6 +93,7 @@ async function rendre() {
     return connexion();
   }
   if (chemin === '/connexion') { history.replaceState(null, '', '/'); return accueil(); }
+  if (chemin === '/compte') { quitterTableau(); etat.ecran = { type: 'compte' }; return ecranCompte(contenu()); }
   if (chemin === '/mentions') { quitterTableau(); etat.ecran = { type: 'mentions' }; return ecranMentions(contenu()); }
   if (chemin === '/applications') { quitterTableau(); etat.ecran = { type: 'applications' }; return ecranApplications(contenu()); }
   if (m) {

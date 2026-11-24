@@ -125,3 +125,34 @@ test('point 5 : /mcp ouverte dans un onglet affiche la page d\'explication (clai
   }
   assert.deepEqual(v, []);
 });
+
+test('point 6 : « Mon compte » permet de couper les courriels de mentions (ordinateur clair, téléphone sombre)', async () => {
+  const { boiteMentions } = await import('../src/courriel.js');
+  const { traiterFileMentions } = await import('../src/notifications.js');
+  const { xavier, eric, b, carte } = await scene();
+  const v = [];
+  for (const [nom, opts] of [['ordinateur, clair', {}], ['téléphone, sombre', { telephone: true, sombre: true }]]) {
+    const pe = await connecter(env, eric, opts);
+    await pe.locator('a[href="/compte"]').click();
+    await pe.getByRole('heading', { name: 'Mon compte' }).waitFor();
+    const caseMentions = pe.getByRole('checkbox', { name: 'Me prévenir par courriel quand on me mentionne' });
+    assert.equal(await caseMentions.isChecked(), nom.startsWith('ordinateur'));
+    v.push(...await auditer(pe, `mon compte (${nom})`));
+    await caseMentions.click();
+    await pe.getByText(/ne recevrez plus de courriel|serez prévenu par courriel/).waitFor();
+    assert.deepEqual(pe.erreurs, []);
+    await pe.context().close();
+  }
+  assert.deepEqual(v, []);
+  // Eric a coupé puis rétabli : la mention de Xavier lui arrive.
+  const px = await connecter(env, xavier);
+  await px.goto(`${env.base}/b/${b.id}/c/${carte.id}`);
+  await px.getByRole('combobox', { name: 'Nouveau commentaire' }).fill('@Eric tu peux regarder ?');
+  await px.keyboard.press('Control+Enter');
+  await px.locator('.commentaire', { hasText: 'tu peux regarder' }).locator('.mention').waitFor();
+  await traiterFileMentions();
+  const m = boiteMentions.filter((x) => x.a === eric.email);
+  assert.equal(m.length, 1);
+  assert.ok(m[0].texte.includes('@Eric tu peux regarder ?'));
+  await px.context().close();
+});

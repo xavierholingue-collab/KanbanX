@@ -1,5 +1,6 @@
 // Mentions @prénom : résolution parmi les membres du tableau, et enregistrement des seules mentions nouvelles.
 import { extraireMentions, prenom } from './markdown.js';
+import { mettreEnFile } from './notifications.js';
 
 export async function membresDuTableau(c, boardId) {
   return (await c.query('select u.id, u.name, u.kind from board_members m join users u on u.id = m.user_id where m.board_id = $1', [boardId])).rows;
@@ -31,6 +32,7 @@ export async function noterMentionsCarte(c, ctx, { boardId, cardId, champ, avant
     await c.query('insert into card_mentions (board_id, card_id, field, user_id, author_id, client_name) values ($1, $2, $3, $4, $5, $6)',
       [boardId, cardId, champ, u, ctx.user.id, ctx.application ?? null]);
   }
+  await mettreEnFile(c, ctx, { boardId, cardId, lieu: champ, texte: apres, destinataires: nouveaux, membres });
   if (citeClaude(apres, ctx) && !extraireMentions(avant).has('claude')) {
     await c.query('insert into card_mentions (board_id, card_id, field, user_id, author_id) values ($1, $2, $3, null, $4)', [boardId, cardId, champ, ctx.user.id]);
   }
