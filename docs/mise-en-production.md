@@ -33,6 +33,7 @@ contrat de l'application.
 | `DATABASE_URL` | Connexion avec le rôle applicatif `kanbanx_app` |
 | `SMTP_URL` | `smtps://…:465` (TLS dès la connexion) ou `smtp://…:587` (STARTTLS exigé) |
 | `SMTP_FROM` | `Nom <adresse>`, au domaine signé par DKIM |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Facultatives, mais les deux ou aucune : « Continuer avec Google » (§ 5 quater). |
 
 Le serveur **refuse de démarrer** si l'une de ces variables manque, contient une valeur de développement, ou
 si son rôle de connexion échappe aux politiques RLS.
@@ -105,6 +106,32 @@ La clé et le jeton ne servent qu'à cette requête : ils ne sont ni stockés ni
   au moins 120 secondes de délai de réponse.
 - **Diffusion** : `GET /api/images/:id`, avec contrôle d'accès, type fixé par le serveur (PNG, JPEG, GIF, WebP
   reconnus par leur signature, jamais de SVG), `nosniff`, `Content-Disposition: inline` et CSP `sandbox`.
+
+## 5 quater. « Continuer avec Google »
+
+Facultatif : sans `GOOGLE_CLIENT_ID` ni `GOOGLE_CLIENT_SECRET`, le bouton n'apparaît pas et seul le lien par
+courriel est proposé. Le serveur refuse de démarrer si une seule des deux variables est fournie, ou si
+l'identifiant n'a pas la forme `…apps.googleusercontent.com`.
+
+- **Client Google** : type « Application Web », créé par le propriétaire du projet Google Cloud, adresse de
+  retour autorisée `BASE_URL/auth/google/retour` (seule adresse, aucune origine JavaScript). Audience
+  « Externe », publiée (« In production ») : les portées demandées (`openid email`) sont non sensibles, Google
+  ne demande pas de vérification. Le secret n'est montré qu'à la création : il va directement dans
+  l'environnement du service, jamais dans le dépôt ni dans un échange écrit.
+- **Accès sortant nouveau** : le serveur doit joindre en HTTPS (443) `oauth2.googleapis.com` (échange du code,
+  10 secondes au plus, sans suivi de redirection). Le navigateur, lui, va sur `accounts.google.com` : rien à
+  ouvrir côté serveur pour cela. Pas d'accès aux clés publiques de Google : le jeton d'identité arrive
+  directement du point de jeton de Google, en HTTPS et contre le secret du client, ce qui dispense de vérifier
+  sa signature (OpenID Connect Core, § 3.1.3.7) ; ses revendications sont vérifiées.
+- **Proxy inverse** : `GET /auth/google/retour` passe tel quel, sans cache (comme le reste de l'application).
+- **Règles** : Google n'ouvre qu'un compte déjà invité, jamais n'en crée, et la personne n'a que les droits de
+  ses invitations. Le compte est reconnu par l'identifiant Google (`sub`) ; la première liaison par l'adresse
+  n'a lieu que si Google fait autorité sur elle (Gmail, ou compte Workspace), sinon on lie son compte Google
+  depuis « Mon compte » après une connexion par courriel.
+- **Base** : migration `011_google.sql` (tables `identites_google` et `google_demandes`, réservées au
+  propriétaire). Les demandes en cours expirent au bout de 10 minutes et sont purgées à la demande suivante.
+- **Suivi** : un client Google inutilisé pendant 6 mois est supprimé par Google, qui prévient l'adresse de
+  contact du projet.
 
 ## 6. Ordre d'une livraison
 
