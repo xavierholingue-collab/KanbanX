@@ -19,6 +19,14 @@ export function verifierConfigProduction(env) {
     if (!u || !['smtp:', 'smtps:'].includes(u.protocol)) pb.push('SMTP_URL doit commencer par smtp:// (STARTTLS exigé) ou smtps://.');
     else if (u.searchParams.get('tls') === 'non') pb.push('SMTP_URL ne peut pas désactiver TLS en production.');
   }
+  // « Continuer avec Google » est facultatif ; s'il est configuré, il l'est entièrement.
+  if (env.GOOGLE_CLIENT_ID || env.GOOGLE_CLIENT_SECRET) {
+    if (!env.GOOGLE_CLIENT_ID) pb.push('GOOGLE_CLIENT_ID manque alors que GOOGLE_CLIENT_SECRET est fourni.');
+    else if (!/^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(env.GOOGLE_CLIENT_ID)) {
+      pb.push('GOOGLE_CLIENT_ID doit être l\'identifiant d\'un client Google (…apps.googleusercontent.com).');
+    }
+    if (!env.GOOGLE_CLIENT_SECRET) pb.push('GOOGLE_CLIENT_SECRET manque alors que GOOGLE_CLIENT_ID est fourni.');
+  }
   if (env.SEED_DEMO === '1') pb.push('SEED_DEMO doit être désactivé en production (comptes de démonstration).');
   return pb;
 }

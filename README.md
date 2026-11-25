@@ -28,6 +28,9 @@ Le jeton d'API de Claude s'affiche une seule fois dans la console.
 
 **Se connecter** : saisir une adresse sur `/connexion`. En développement, le
 lien magique s'affiche dans la console du serveur au lieu d'être envoyé.
+« Continuer avec Google » apparaît si `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` sont fournis
+(client Google « Application Web », retour `BASE_URL/auth/google/retour`) ; il n'ouvre que des
+comptes déjà invités.
 
 Le serveur écoute sur `127.0.0.1` (variable `HOST` pour changer). En développement, il applique
 les migrations et crée les données de démonstration au démarrage. En production, il ne fait ni l'un

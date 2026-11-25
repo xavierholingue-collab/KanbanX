@@ -75,6 +75,16 @@ textarea.champ { resize: vertical; line-height: var(--interligne); }
 .message { padding: var(--e-3); border-radius: var(--rayon-m); background: var(--c-primaire-pale); }
 .message-erreur { background: var(--c-danger-pale); color: var(--c-sur-danger-pale); }
 
+/* Connexion avec Google : bouton neutre pleine largeur, séparé du lien par courriel par « ou ». */
+.btn-google { background: var(--c-surface); border-color: var(--c-bordure-forte); color: var(--c-texte); }
+.btn-google:hover { background: var(--c-primaire-pale); }
+.connexion-google { display: grid; gap: var(--e-2); margin-top: var(--e-4); }
+.connexion-google .btn-google { width: 100%; }
+.separateur { display: flex; align-items: center; gap: var(--e-3); margin: var(--e-4) 0 0; color: var(--c-texte-doux); font-size: var(--t-s); }
+.separateur::before, .separateur::after { content: ''; flex: 1; border-top: 1px solid var(--c-bordure-forte); }
+.boite .separateur + form { margin-top: var(--e-3); }
+.liaison-google > * + * { margin-top: var(--e-3); }
+
 .grille-tableaux { list-style: none; padding: 0; margin: var(--e-4) 0 0; display: grid; gap: var(--e-3); grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
 .tuile {
   display: flex; align-items: flex-end; min-height: 6rem; padding: var(--e-3); border-radius: var(--rayon-m);
