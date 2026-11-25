@@ -9,6 +9,7 @@ import { ecranMentions } from './mentions.js';
 import { ecranCompte } from './compte.js';
 import { horodatage } from './activite.js';
 import { importerFichier } from './import.js';
+import { methodesConnexion, resultatGoogle, MESSAGES_CONNEXION, messageResultat, boutonGoogle } from './google.js';
 
 export const etat = { moi: undefined, ecran: null }; // moi : undefined = inconnu, null = non connecté
 
@@ -85,6 +86,7 @@ async function rendre() {
   const chemin = location.pathname;
   const m = chemin.match(/^\/b\/([0-9a-f-]{36})(?:\/c\/([0-9a-f-]{36}))?\/?$/);
   if (chemin === '/connexion/verifier') return verifier();
+  if (chemin === '/connexion/suite') return suiteConnexion();
   if (etat.moi === undefined) await chargerMoi();
   entete();
   if (chemin === '/oauth/authorize') { quitterTableau(); return autorisation(); }
@@ -128,9 +130,12 @@ window.addEventListener('focus', async () => {
   if (etat.moi) rendre();
 });
 
-function connexion({ intro } = {}) {
+async function connexion({ intro } = {}) {
   etat.ecran = { type: 'connexion' };
   document.title = 'Connexion — KanbanX';
+  const resultat = resultatGoogle();
+  const { google } = await methodesConnexion();
+  if (etat.ecran?.type !== 'connexion') return; // l'écran a changé pendant l'attente
   const email = h('input.champ#email', { type: 'email', name: 'email', autocomplete: 'email', required: true, placeholder: 'prenom@exemple.fr' });
   const zoneMessage = h('div', { role: 'status' });
   const bouton = h('button.btn.btn-primaire', { type: 'submit' }, 'Recevoir un lien de connexion');
@@ -152,12 +157,25 @@ function connexion({ intro } = {}) {
   } },
   h('div', h('label.etiquette-champ', { for: 'email' }, 'Adresse courriel'), email),
   bouton, zoneMessage);
+  const zoneGoogle = h('div', { role: 'status' });
   contenu().replaceChildren(h('div.page', h('section.boite', { 'aria-labelledby': 'titre-connexion' },
     h('h1#titre-connexion', 'Connexion à KanbanX'),
     intro ? h('p.message', intro) : '',
-    h('p.aide', 'KanbanX fonctionne sur invitation. Saisissez votre adresse : nous vous envoyons un lien magique, sans mot de passe.'),
+    messageResultat(MESSAGES_CONNEXION, resultat),
+    google
+      ? [h('p.aide', 'KanbanX fonctionne sur invitation. Continuez avec le compte Google de l\'adresse invitée, ou recevez un lien de connexion par courriel, sans mot de passe.'),
+        h('div.connexion-google', boutonGoogle({ libelle: 'Continuer avec Google', chemin: '/api/auth/google', zoneMessage: zoneGoogle }), zoneGoogle),
+        h('p.separateur', h('span', 'ou'))]
+      : h('p.aide', 'KanbanX fonctionne sur invitation. Saisissez votre adresse : nous vous envoyons un lien magique, sans mot de passe.'),
     form)));
   email.focus();
+}
+
+/** Retour de Google, session ouverte par le serveur : reprendre là où la personne allait. */
+async function suiteConnexion() {
+  etat.moi = undefined;
+  await chargerMoi();
+  naviguer(etat.moi ? (reprendreApres() ?? '/') : '/connexion', { remplacer: true });
 }
 
 async function verifier() {
