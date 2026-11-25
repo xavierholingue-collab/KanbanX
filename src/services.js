@@ -5,6 +5,7 @@ import { ErreurHttp, introuvable, interdit, invalide } from './erreurs.js';
 import { publier, expulser } from './evenements.js';
 import { rendreMarkdown, prenom } from './markdown.js';
 import { membresDuTableau, noterMentionsCarte } from './mentions.js';
+import { lireLiaison } from './google.js';
 
 const PAS = 1024;
 
@@ -70,7 +71,7 @@ async function positionCarte(c, colonneId, index, sauf) {
 export async function lirePreferences(ctx) {
   return agir(ctx, async (c) => {
     const { rows } = await c.query('select mention_emails, email from users where id = kx_uid()');
-    return { email: rows[0]?.email, mentionEmails: rows[0]?.mention_emails ?? false };
+    return { email: rows[0]?.email, mentionEmails: rows[0]?.mention_emails ?? false, google: await lireLiaison(c) };
   });
 }
 

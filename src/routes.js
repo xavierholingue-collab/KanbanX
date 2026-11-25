@@ -6,6 +6,8 @@ import { config } from './config.js';
 import { ErreurHttp } from './erreurs.js';
 import { importerTrello } from './import-trello.js';
 import { lireImage } from './images.js';
+import { googleActif, commencer as commencerGoogle, delier as delierGoogle } from './google.js';
+import { limiter } from './securite.js';
 
 export const FLUX = Symbol('flux');
 const nom = (max = 100, required = true) => ({ type: 'string', min: 1, max, required });
@@ -29,6 +31,18 @@ async ({ body, ip, entetes }) => {
   return { ok: true, csrf: s.csrf };
 });
 
+r('GET', '/api/auth/methodes', { auth: 'public', tag: 'Authentification', resume: 'Moyens de connexion proposés : lien par courriel (toujours), « Continuer avec Google » (si configuré).' },
+() => ({ google: googleActif() }));
+
+r('POST', '/api/auth/google', { auth: 'public', tag: 'Authentification', resume: 'Commencer « Continuer avec Google » : renvoie l\'adresse de Google et lie la demande à ce navigateur (cookie). Réservé aux comptes déjà invités.' },
+async ({ ip, entetes }) => {
+  const l = limiter(`google-ip:${ip}`, 30, 15 * 60 * 1000);
+  if (!l.ok) throw new ErreurHttp(429, 'trop_de_demandes', 'Trop de demandes. Réessayez plus tard.', { reessayerDansS: l.reessayerDansS });
+  const d = await commencerGoogle();
+  entetes['Set-Cookie'] = d.cookie;
+  return { url: d.url };
+});
+
 r('POST', '/api/auth/deconnexion', { auth: 'session', tag: 'Authentification', resume: 'Fermer la session.' },
 async ({ req, entetes }) => { await fermerSession(req); entetes['Set-Cookie'] = cookieSession('', 0); return { ok: true }; });
 
@@ -38,6 +52,18 @@ async ({ ctx }) => ({ user: { ...ctx.user, ...(await S.lirePreferences(ctx)) }, 
 r('PATCH', '/api/me/preferences', { auth: 'session', tag: 'Authentification', resume: 'Changer ses préférences : courriel quand on me mentionne.',
   corps: { mentionEmails: { type: 'boolean', required: true, description: 'Recevoir un courriel (regroupé, au plus un toutes les 10 minutes) quand on me mentionne.' } } },
 ({ ctx, body }) => S.changerPreferences(ctx, body));
+
+r('POST', '/api/me/google', { auth: 'session', tag: 'Authentification', resume: 'Commencer la liaison de mon compte à un compte Google : renvoie l\'adresse de Google. Ensuite, « Continuer avec Google » suffit pour me connecter.' },
+async ({ ctx, entetes }) => {
+  const l = limiter(`google-liaison:${ctx.user.id}`, 20, 15 * 60 * 1000);
+  if (!l.ok) throw new ErreurHttp(429, 'trop_de_demandes', 'Trop de demandes. Réessayez plus tard.', { reessayerDansS: l.reessayerDansS });
+  const d = await commencerGoogle({ ctx });
+  entetes['Set-Cookie'] = d.cookie;
+  return { url: d.url };
+});
+
+r('DELETE', '/api/me/google', { auth: 'session', tag: 'Authentification', resume: 'Délier mon compte Google. La connexion par courriel reste possible.' },
+({ ctx }) => delierGoogle(ctx));
 
 // --- Tableaux ---
 r('GET', '/api/boards', { tag: 'Tableaux', resume: 'Lister les tableaux auxquels on est invité.' }, ({ ctx }) => S.listerTableaux(ctx));

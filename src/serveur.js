@@ -13,6 +13,7 @@ import { genererOpenApi } from './openapi.js';
 import { traiterMcp } from './mcp.js';
 import { config } from './config.js';
 import { etatSante } from './sante.js';
+import { googleActif, terminer as terminerGoogle } from './google.js';
 import { metadonneesRessource, metadonneesServeur, enregistrerClient, analyserDemande, delivrerJetons } from './oauth.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -226,6 +227,18 @@ async function oauth(req, res, url) {
   throw new ErreurHttp(404, 'introuvable', 'Adresse inconnue.');
 }
 
+// ---------- Retour de « Continuer avec Google » ----------
+
+async function retourGoogle(req, res, url) {
+  exigerMethode(req, 'GET', 'HEAD');
+  if (!googleActif()) throw new ErreurHttp(404, 'introuvable', 'Adresse inconnue.');
+  const ip = ipClient(req, config.trustProxy);
+  const l = limiter(`google-retour:${ip}`, 30, 15 * 60 * 1000);
+  const r = l.ok ? await terminerGoogle(req, url) : { location: '/connexion?google=trop', cookies: [] };
+  res.writeHead(302, { Location: r.location, ...(r.cookies.length ? { 'Set-Cookie': r.cookies } : {}), ...PAS_DE_CACHE });
+  res.end();
+}
+
 export function creerServeur() {
   const s = http.createServer(async (req, res) => {
     for (const [k, v] of Object.entries(EN_TETES)) res.setHeader(k, v);
@@ -236,6 +249,7 @@ export function creerServeur() {
       if (url.pathname === '/mcp') await traiterMcp(req, res, { limiter, memeOrigine });
       else if (url.pathname.startsWith('/api/')) await api(req, res, url);
       else if (url.pathname.startsWith('/.well-known/') || url.pathname.startsWith('/oauth/')) await oauth(req, res, url);
+      else if (url.pathname === '/auth/google/retour') await retourGoogle(req, res, url);
       else await statique(req, res, url);
     } catch (e) {
       const err = erreurVersReponse(e);

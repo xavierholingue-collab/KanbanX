@@ -16,6 +16,14 @@ export const config = {
   smtpUrl: e.SMTP_URL || '',
   smtpFrom: e.SMTP_FROM || 'KanbanX <no-reply@kanbanx.invalid>',
   seedDemo: e.SEED_DEMO === '1',
+  // « Continuer avec Google » : actif seulement si l'identifiant et le secret du client sont fournis.
+  // Les adresses de Google sont fixes ; seuls les tests les remplacent, en mémoire, par un faux Google local.
+  google: {
+    clientId: e.GOOGLE_CLIENT_ID || '',
+    clientSecret: e.GOOGLE_CLIENT_SECRET || '',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+  },
   lienTtlMs: 15 * 60 * 1000,
   sessionTtlMs: 30 * 24 * 3600 * 1000,
 };
